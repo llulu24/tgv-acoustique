@@ -1,0 +1,145 @@
+/* Analyse Acoustique TGV — habillage v0.9.7 RC (build 02/11 h)
+ * Couche chargée en dernier : elle ne change aucun calcul, seulement l'apparence.
+ * Principes :
+ *   - couleurs de la charte SNCF uniquement (Palette couleurs SNCF, mars 2018), voir les variables ci-dessous ;
+ *   - un seul élément fort : la commande d'enregistrement (gros bouton, carmin pendant l'enregistrement),
+ *     tout le reste est calme : fonds blancs, bordures fines, pas d'ombres décoratives ;
+ *   - polices système (l'appli doit marcher hors ligne en cabine) avec une échelle fixe 12/14/16/20/24 px ;
+ *   - cibles tactiles de 44 px minimum, textes d'aide en 13–14 px.
+ */
+html.ux{
+  /* Palette couleurs SNCF (mars 2018) uniquement. Bleu Anthracite et Noir Sûreté non utilisés :
+     la charte réserve le Bleu Anthracite aux affichages Sûreté. */
+  --ux-ink:#3C3732;        /* Carbone : texte */
+  --ux-violet:#6E1E78;     /* Violet : couleur principale */
+  --ux-prune:#A1006B;      /* Prune : survol des boutons */
+  --ux-violet-soft:#E1E1E1;/* Cool Gray 1 : survol des boutons secondaires */
+  --ux-carmin:#CD0037;     /* Framboise : enregistrement, dépose */
+  --ux-green:#82BE00;      /* Vert Pomme : état correct */
+  --ux-yellow:#FFB612;     /* Jaune Safran : contrôle, focus clavier */
+  --ux-blue:#0088CE;       /* Bleu Primaire : orientation */
+  --ux-bg:#E1E1E1;         /* Cool Gray 1 : fond de page */
+  --ux-line:#D7D7D7;       /* Cool Gray 3 : bordures */
+  --ux-muted:#4D4F53;      /* Cool Gray 11 : textes secondaires */
+  --ux-gray7:#A0A0A0; --ux-gray9:#747678;
+  /* régimes = couleurs du Campbell, de la carte et du rapport */
+  --ux-traction:#D52B1E;   /* Rouge Assist */
+  --ux-erre:#0088CE;       /* Bleu Primaire */
+  --ux-frein:#82BE00;      /* Vert Pomme */
+  --ux-statique:#747678;   /* Cool Gray 9 */
+}
+html.ux,html.ux body{background:var(--ux-bg)!important}
+html.ux body{font-size:15px;line-height:1.45;font-variant-numeric:tabular-nums}
+
+/* ---------- en-tête compact, état de l'appli dans l'en-tête ---------- */
+html.ux header{box-shadow:0 1px 0 var(--ux-line)!important;background:#FFFFFF!important}
+html.ux .ux-head-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+html.ux .ux-head-right .top-badge{margin-left:0!important}
+html.ux .ux-head-right .pwa-state{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--ux-line);background:#FFFFFF!important;color:var(--ux-ink)!important;font-weight:600}
+html.ux .ux-head-right .pwa-state::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--ux-yellow);vertical-align:1px}
+html.ux .ux-head-right .pwa-state.ok::before{background:var(--ux-green)}
+html.ux .ux-head-right #pwaInstallButton{min-height:34px;padding:4px 12px;font-size:13px}
+html.ux #pwaBar{display:none!important}
+
+/* ---------- onglets : une seule couleur active ---------- */
+html.ux .mode-tabs{gap:8px!important}
+html.ux .mode-tabs button{min-height:46px;font-size:16px;font-weight:600;border-radius:10px!important}
+html.ux .mode-tabs button.active,html.ux .mode-tabs button.active:hover{background:var(--ux-violet)!important;border-color:var(--ux-violet)!important;color:#FFFFFF!important}
+html.ux .mode-tabs button:not(.active){border:1px solid var(--ux-line)!important;color:var(--ux-ink)!important}
+html.ux .mode-tabs button:not(.active):hover{border-color:var(--ux-violet)!important;background:var(--ux-violet-soft)!important}
+
+/* ---------- réglages des essieux repliés sur tous les écrans ---------- */
+html.ux #transmissionReference{padding:0!important;border:1px solid var(--ux-line)!important;box-shadow:none!important;overflow:hidden}
+html.ux #transmissionReference>.mobile-section-toggle{display:flex!important;width:100%;align-items:center;justify-content:space-between;gap:12px;min-height:48px;margin:0!important;padding:10px 16px!important;border:0!important;border-radius:0!important;background:#FFFFFF!important;color:var(--ux-ink)!important;font-size:15px!important;font-weight:600;text-align:left}
+html.ux #transmissionReference>.mobile-section-toggle:hover{background:var(--ux-violet-soft)!important}
+html.ux #transmissionReference>.mobile-section-toggle::after{content:"Modifier";font-size:13px;font-weight:600;color:var(--ux-violet);border:1px solid var(--ux-violet);border-radius:8px;padding:4px 10px}
+html.ux #transmissionReference:not(.mobile-collapsed)>.mobile-section-toggle::after{content:"Fermer"}
+html.ux #transmissionReference.mobile-collapsed>:not(.mobile-section-toggle){display:none!important}
+html.ux #transmissionReference:not(.mobile-collapsed)>:not(.mobile-section-toggle){margin-left:16px;margin-right:16px}
+html.ux #transmissionReference:not(.mobile-collapsed)>.transmission-summary{margin-bottom:14px}
+html.ux .ux-axle-chip{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:6px;font-size:13px;font-weight:600}
+html.ux .ux-axle-chip.e1{background:#FFFFFF;color:var(--ux-ink);border:2px solid #0088CE}
+html.ux .ux-axle-chip.e2{background:#FFFFFF;color:var(--ux-ink);border:2px solid #E05206}
+html.ux .ux-axle-src{font-size:13px;font-weight:400;color:var(--ux-muted);margin-left:6px}
+
+/* ---------- champs : tous blancs ---------- */
+html.ux input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),html.ux select,html.ux textarea{background:#FFFFFF!important;color:var(--ux-ink)!important;border:1px solid #B9B9B9!important;border-radius:8px!important;min-height:40px}
+html.ux input:focus,html.ux select:focus,html.ux textarea:focus{outline:2px solid var(--ux-violet)!important;outline-offset:1px;border-color:var(--ux-violet)!important}
+html.ux input::placeholder,html.ux textarea::placeholder{color:#A0A0A0!important;font-style:italic}
+
+/* ---------- boutons : principal, secondaire, désactivé ---------- */
+html.ux button{min-height:44px;border-radius:10px!important;font-weight:600}
+html.ux button:hover:not(:disabled){background:var(--ux-prune)!important;border-color:var(--ux-prune)!important}
+html.ux button.secondary:hover:not(:disabled){background:var(--ux-violet-soft)!important;border-color:var(--ux-violet)!important;color:var(--ux-ink)!important}
+html.ux button.secondary{border-width:1px!important}
+html.ux button:disabled{background:#FFFFFF!important;color:#747678!important;border:1px solid var(--ux-line)!important;cursor:not-allowed}
+html.ux :focus-visible{outline:3px solid var(--ux-yellow)!important;outline-offset:2px}
+
+/* ---------- barres d'état : information claire, fond foncé réservé aux erreurs ---------- */
+html.ux #status,html.ux .acq-status{background:#FFFFFF!important;color:var(--ux-ink)!important;border:1px solid var(--ux-line)!important;border-left:6px solid var(--ux-violet)!important;font-weight:500!important;font-size:15px!important;box-shadow:none!important;min-height:44px!important}
+html.ux #status.ux-err,html.ux .acq-status.ux-err{background:#FFFFFF!important;border-left-color:var(--ux-carmin)!important}
+
+/* ---------- cartes ---------- */
+html.ux .card{border:1px solid var(--ux-line)!important;box-shadow:none!important;border-radius:12px!important}
+html.ux .card h2{font-size:20px;letter-spacing:0}
+html.ux .small{font-size:13px!important;line-height:1.5}
+
+/* ---------- la commande d'enregistrement (élément fort) ---------- */
+html.ux .acq-command-panel{border:1px solid var(--ux-line)!important;background:#FFFFFF!important}
+/* PC : l'en-tête défile, les onglets puis la commande d'enregistrement restent visibles */
+html.ux[data-layout="desktop"] header{position:relative!important}
+html.ux[data-layout="desktop"] .mode-tabs{top:0!important;background:var(--ux-bg)!important}
+html.ux[data-layout="desktop"] .mode-tabs{margin-bottom:0!important;padding:8px 0!important}
+html.ux[data-layout="desktop"] #transmissionReference{margin-top:12px}
+html.ux[data-layout="desktop"] .acq-command-panel{position:sticky;top:62px;z-index:39}
+html.ux[data-layout="desktop"] #acquisitionMode .hero{display:none}
+html.ux #acqStart,html.ux #acqStop{min-height:56px;min-width:220px;font-size:18px!important;font-weight:700;padding:0 22px;display:inline-flex;align-items:center;justify-content:center;gap:10px}
+html.ux #acqStart::before{content:"";width:16px;height:16px;border-radius:50%;background:var(--ux-carmin);box-shadow:0 0 0 3px #FFFFFF}
+html.ux #acqStop{background:var(--ux-carmin)!important;border-color:var(--ux-carmin)!important;color:#FFFFFF!important}
+html.ux #acqStop:hover:not(:disabled){background:var(--ux-prune)!important;border-color:var(--ux-prune)!important}
+html.ux #acqStop::before{content:"";width:14px;height:14px;border-radius:3px;background:#FFFFFF}
+html.ux:not(.ux-rec) #acqStop{display:none!important}
+html.ux.ux-rec #acqStart{display:none!important}
+html.ux .ux-rec-time{font-weight:700;font-size:16px;color:var(--ux-carmin);display:none;align-items:center;gap:8px;padding:0 6px}
+html.ux.ux-rec .ux-rec-time{display:inline-flex}
+html.ux .ux-rec-time::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--ux-carmin);animation:uxPulse 1.4s ease-in-out infinite}
+@keyframes uxPulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){html.ux .ux-rec-time::before{animation:none}}
+html.ux.ux-rec .acq-command-panel{border-color:var(--ux-carmin)!important;box-shadow:inset 0 3px 0 var(--ux-carmin)!important}
+
+/* régime : boutons colorés quand actifs (mêmes couleurs que le Campbell et les marqueurs) */
+html.ux [data-regime-btn]{min-height:48px;font-size:16px!important;border:1px solid var(--ux-line)!important}
+html.ux [data-regime-btn][aria-pressed="true"]{color:#FFFFFF!important}
+html.ux [data-regime-btn="Traction"][aria-pressed="true"]{background:var(--ux-traction)!important;border-color:var(--ux-traction)!important}
+html.ux [data-regime-btn="Erre"][aria-pressed="true"]{background:var(--ux-erre)!important;border-color:var(--ux-erre)!important}
+html.ux [data-regime-btn="Freinage"][aria-pressed="true"]{color:var(--ux-ink)!important;background:var(--ux-frein)!important;border-color:var(--ux-frein)!important}
+html.ux [data-regime-btn="Statique"][aria-pressed="true"]{background:var(--ux-statique)!important;border-color:var(--ux-statique)!important}
+html.ux .acq-kpi{border:1px solid var(--ux-line)!important}
+html.ux .acq-kpi strong{text-transform:none!important;letter-spacing:0!important;font-size:13px!important;font-weight:600}
+html.ux .acq-kpi span{font-size:24px!important}
+
+/* ---------- préconisations en cartes ---------- */
+html.ux #precoSection{border-top:4px solid var(--ux-violet)!important}
+html.ux .preco-list{display:grid;gap:10px;margin-top:10px}
+html.ux .preco-card{display:grid;grid-template-columns:150px 1fr;gap:4px 16px;padding:12px 14px;border:1px solid var(--ux-line);border-left:6px solid var(--ux-muted);border-radius:10px;background:#FFFFFF}
+html.ux .preco-card.depose{border-left-color:var(--ux-carmin);background:#FFFFFF}
+html.ux .preco-card.controle{border-left-color:var(--ux-yellow)}
+html.ux .preco-card.orientation{border-left-color:var(--ux-blue)}
+html.ux .preco-card.info{border-left-color:#A0A0A0}
+html.ux .preco-niv-chip{grid-row:span 3;align-self:start;display:inline-block;justify-self:start;padding:4px 10px;border-radius:999px;font-size:13px;font-weight:700;color:#FFFFFF;background:var(--ux-muted)}
+html.ux .preco-card.depose .preco-niv-chip{background:var(--ux-carmin)}
+html.ux .preco-card.controle .preco-niv-chip{background:var(--ux-yellow);color:var(--ux-ink)}
+html.ux .preco-card.orientation .preco-niv-chip{background:var(--ux-blue)}
+html.ux .preco-card.info .preco-niv-chip{background:#A0A0A0;color:var(--ux-ink)}
+html.ux .preco-title{font-size:16px;font-weight:700;color:var(--ux-ink)}
+html.ux .preco-constat{font-size:14px;color:var(--ux-muted)}
+html.ux .preco-action{font-size:15px;color:var(--ux-ink)}
+html.ux .preco-action b{color:var(--ux-violet)}
+@media (max-width:700px){html.ux .preco-card{grid-template-columns:1fr}html.ux .preco-niv-chip{grid-row:auto}}
+
+/* ---------- diagnostic automatique : l'essentiel d'abord ---------- */
+html.ux .ux-folded li:nth-child(n+4){display:none}
+html.ux .ux-fold-btn{margin-top:6px;min-height:36px;font-size:14px}
+
+/* ---------- impression : rien de cet habillage ---------- */
+@media print{html.ux .ux-head-right .pwa-state,html.ux .ux-rec-time{display:none!important}}

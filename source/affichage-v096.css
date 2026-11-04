@@ -1,0 +1,159 @@
+/* Analyse Acoustique TGV v0.9.6 — dispositions tablette et téléphone (le PC est inchangé) */
+.layout-choice{max-width:1500px;margin:0 auto 14px;padding:0 16px;font-size:12px;color:var(--muted)}
+.layout-choice select{width:auto;display:inline-block;padding:4px 8px;margin-left:4px}
+.tablet-cockpit .hidden,.cockpit-grid .hidden{display:none!important}
+
+/* ---------- cockpit d'acquisition (tablette + téléphone) ---------- */
+html:is(.layout-tablet,.layout-phone) .tablet-cockpit{margin:8px 0!important;padding:10px 12px!important}
+html:is(.layout-tablet,.layout-phone) .cockpit-title{font-size:13px;font-weight:800;margin-bottom:6px;color:#3C3732}
+html:is(.layout-tablet,.layout-phone) .cockpit-grid{display:grid;gap:8px;grid-template-columns:repeat(5,minmax(0,1fr))}
+html:is(.layout-tablet,.layout-phone) .cockpit-field{display:flex;flex-direction:column;gap:3px;margin:0!important;font-size:11px;font-weight:700;color:var(--muted)}
+html:is(.layout-tablet,.layout-phone) .cockpit-field input,html:is(.layout-tablet,.layout-phone) .cockpit-field select{min-height:44px;font-size:16px;padding:8px 10px}
+html:is(.layout-tablet,.layout-phone) #acquisitionMode>.hero{display:none!important}
+html:is(.layout-tablet,.layout-phone) .cockpit-perms.perms-ok{display:none!important}
+html:is(.layout-tablet,.layout-phone) .cockpit-perms{padding:10px 12px!important;margin:8px 0!important}
+html:is(.layout-tablet,.layout-phone) .cockpit-perms h2{font-size:14px!important;margin:0 0 6px!important}
+
+/* ---------- tablette ---------- */
+html.layout-tablet body{font-size:15px}
+html.layout-tablet header{position:relative!important}
+html.layout-tablet .header-inner{display:flex!important;align-items:center!important;gap:12px!important;padding:6px 14px!important}
+html.layout-tablet .brand{display:flex!important;align-items:center!important;gap:12px!important;min-width:0}
+html.layout-tablet .brand img{width:auto!important;max-width:none!important;height:46px!important;max-height:46px!important;padding:2px!important;border-radius:8px!important}
+html.layout-tablet .brand h1{font-size:20px!important;margin:0!important;line-height:1.1!important}
+html.layout-tablet .brand p{display:none!important}
+html.layout-tablet .top-badge{margin-left:auto!important;font-size:12px!important;padding:5px 10px!important;white-space:nowrap}
+html.layout-tablet main{padding:6px 12px 12px!important}
+html.layout-tablet .mode-tabs{position:sticky!important;top:0!important;z-index:90!important;display:grid!important;grid-template-columns:1fr 1fr 1fr!important;gap:8px!important;margin:0 -12px 6px!important;padding:6px 12px!important;background:#FFFFFF!important;box-shadow:0 4px 12px rgba(60,55,50,.12)!important}
+html.layout-tablet .mode-tabs button{min-height:44px;padding:8px!important;font-size:14px!important}
+html.layout-tablet body.is-standalone #pwaBar{display:none!important}
+html.layout-tablet .pwa-bar{padding:6px 10px!important;margin:6px 0!important;font-size:12px}
+html.layout-tablet .panel{padding:12px!important}
+html.layout-tablet .card{border-radius:12px!important}
+
+/* sections repliables (mêmes boutons que sur téléphone) */
+html.layout-tablet .mobile-section-toggle{display:flex!important;width:100%;align-items:center;justify-content:space-between;border:1px solid var(--border)!important;border-radius:10px!important;padding:8px 12px!important;background:#FFFFFF!important;color:#3C3732!important;box-shadow:none!important;font-weight:800;font-size:14px!important;text-align:left;min-height:42px}
+html.layout-tablet .mobile-section-toggle::after{content:"−";font-size:20px;color:#6E1E78}
+html.layout-tablet .mobile-collapsed>.mobile-section-toggle::after{content:"+"}
+html.layout-tablet .mobile-collapsed>:not(.mobile-section-toggle){display:none!important}
+html.layout-tablet .transmission-card{padding:0!important;margin:6px 0!important}
+html.layout-tablet .transmission-card>.mobile-section-toggle,html.layout-tablet .history-section>.mobile-section-toggle{background:#FFFFFF!important;color:#3C3732!important;border:1px solid var(--border)!important;min-height:40px;padding:8px 12px;font-size:14px}
+html.layout-tablet .pwa-bar .small{display:none}
+html.layout-tablet .acq-live-summary{height:92px!important;min-height:92px!important;padding:8px 10px!important;font-size:12px!important;line-height:1.35!important}
+
+/* commandes fixées sous les onglets */
+html.layout-tablet .acq-command-panel{position:sticky!important;top:56px!important;z-index:80!important;display:grid!important;grid-template-columns:auto 1fr;gap:8px 12px!important;align-items:center!important;padding:8px 12px!important;margin:6px 0!important;background:#FFFFFF!important;box-shadow:0 5px 18px rgba(60,55,50,.18)!important}
+html.layout-tablet .acq-command-main{display:flex!important;gap:8px!important;flex-wrap:nowrap!important}
+html.layout-tablet .acq-command-main button{min-height:48px!important;min-width:0!important;padding:8px 16px!important;font-size:15px!important}
+html.layout-tablet .acq-command-main #acqStart{min-width:130px!important}
+html.layout-tablet .acq-command-exports{display:flex!important;justify-content:flex-end;gap:6px!important;flex-wrap:wrap!important}
+html.layout-tablet .acq-command-exports button{min-height:40px!important;padding:6px 10px!important;font-size:12px!important;width:auto!important}
+html.layout-tablet .acq-regime-bar{grid-column:1/-1;display:grid!important;grid-template-columns:auto repeat(4,minmax(0,1fr));gap:8px!important}
+html.layout-tablet .acq-regime-bar button{min-height:46px!important;font-size:15px!important;width:100%}
+html.layout-tablet .acq-wake-state{grid-column:1/-1}
+
+html.layout-tablet .acq-kpis{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px!important;margin:6px 0!important}
+html.layout-tablet .acq-kpi{padding:6px 8px!important}
+html.layout-tablet .acq-kpi strong{font-size:10px!important}
+html.layout-tablet .acq-kpi span{font-size:20px!important}
+html.layout-tablet #acqStatus{font-size:13px!important;padding:8px 12px!important;margin:6px 0!important}
+
+/* graphiques en premier, réglages ensuite */
+html.layout-tablet .acq-grid{display:flex!important;flex-direction:column!important;gap:10px!important}
+html.layout-tablet .acq-main{order:1;display:grid!important;grid-template-columns:1fr!important;gap:10px!important}
+html.layout-tablet .acq-side{order:2;display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+html.layout-tablet .acq-main>section{grid-column:1/-1;margin:0!important}
+html.layout-tablet .acq-main h2{font-size:15px!important;margin-bottom:6px!important}
+html.layout-tablet .acq-chart{height:210px!important}
+html.layout-tablet #acqSpectrogram{height:230px!important}
+html.layout-tablet .acq-map-frame{height:360px!important}
+@media (orientation:landscape){
+  html.layout-tablet .acq-main{grid-template-columns:1fr 1fr!important}
+  html.layout-tablet .acq-main>section.live-pair{grid-column:auto}
+  html.layout-tablet .acq-chart{height:190px!important}
+  html.layout-tablet #acqSpectrogram{height:190px!important}
+  html.layout-tablet .acq-side{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+}
+@media (orientation:portrait){
+  html.layout-tablet .cockpit-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  html.layout-tablet .acq-command-panel{grid-template-columns:1fr}
+  html.layout-tablet .acq-command-exports{justify-content:flex-start}
+}
+
+/* analyse de fichiers sur tablette */
+html.layout-tablet .controls>.row{gap:8px!important}
+html.layout-tablet .controls input,html.layout-tablet .controls select{min-height:42px}
+html.layout-tablet #chart{height:360px!important}
+html.layout-tablet .campbell-toolbar button{min-height:42px}
+
+/* ---------- téléphone : cockpit sur 2 colonnes ---------- */
+html.layout-phone .cockpit-grid{grid-template-columns:1fr 1fr!important}
+html.layout-phone .cockpit-field input,html.layout-phone .cockpit-field select{min-height:42px;font-size:16px}
+
+/* ---------- tablette en paysage : tout l'essentiel au-dessus de la ligne de flottaison ---------- */
+@media (orientation:landscape){
+  html.layout-tablet .header-inner{padding:4px 14px!important}
+  html.layout-tablet .brand img{height:38px!important;max-height:38px!important}
+  html.layout-tablet .brand h1{font-size:18px!important}
+  html.layout-tablet .mode-tabs button{min-height:38px!important;padding:6px!important}
+  html.layout-tablet body:has(#acquisitionMode:not(.hidden)) #transmissionReference{display:none!important}
+  html.layout-tablet body:has(#acquisitionMode:not(.hidden)) #pwaBar{display:none!important}
+  html.layout-tablet .cockpit-title{display:none}
+  html.layout-tablet .tablet-cockpit{padding:8px 12px!important;margin:4px 0!important}
+  html.layout-tablet .cockpit-field input,html.layout-tablet .cockpit-field select{min-height:40px;padding:6px 10px}
+  html.layout-tablet .acq-command-panel{top:50px!important;grid-template-columns:auto 1fr!important;grid-template-areas:"main regime" "exports exports" "wake wake";padding:6px 10px!important;margin:4px 0!important;gap:6px 10px!important}
+  html.layout-tablet .acq-command-main{grid-area:main}
+  html.layout-tablet .acq-regime-bar{grid-area:regime;grid-column:auto!important;grid-template-columns:repeat(4,minmax(0,1fr))!important}
+  html.layout-tablet .acq-regime-label{display:none}
+  html.layout-tablet .acq-command-exports{grid-area:exports;justify-content:flex-end}
+  html.layout-tablet .acq-command-exports button{min-height:32px!important;padding:4px 10px!important;font-size:11px!important}
+  html.layout-tablet .acq-wake-state{grid-area:wake}
+  html.layout-tablet .acq-kpis{margin:4px 0!important}
+  html.layout-tablet .acq-kpi{display:flex!important;align-items:baseline;justify-content:center;gap:8px;padding:4px 8px!important}
+  html.layout-tablet .acq-kpi span{font-size:18px!important}
+  html.layout-tablet #acqStatus{padding:6px 12px!important;margin:4px 0!important;font-size:12px!important}
+  html.layout-tablet .acq-live-summary{height:52px!important;min-height:52px!important}
+  html.layout-tablet .acq-main>section:first-child{display:none}
+}
+
+/* v0.9.6 — sessions enregistrées et récupération */
+.sessions-banner{margin:8px 0;padding:10px 14px;border-radius:10px;background:#FFFFFF;border:1px solid #FFB612;color:#3C3732;font-size:14px}
+.sessions-banner button{margin-left:8px;padding:6px 12px}
+.sessions-banner.hidden{display:none!important}
+.sessions-section{margin-top:12px}
+.sessions-state{margin:6px 0}
+.sessions-table td{vertical-align:middle}
+.sessions-actions{white-space:nowrap}
+.sessions-actions button{padding:6px 10px;margin:2px 0}
+
+/* v0.9.6 b : carte du trajet GPS (onglet Analyse) */
+.route-map{height:440px;border:1px solid var(--border,#D7D7D7);border-radius:10px;margin-top:8px;overflow:hidden}
+.route-map-fallback{width:100%;border:1px solid var(--border,#D7D7D7);border-radius:10px;margin-top:8px}
+.route-legend{margin-top:6px;font-size:13px;line-height:1.9}
+.route-key{display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap}
+.route-key i{display:inline-block;width:14px;height:10px;border-radius:2px}
+html.layout-phone .route-map{height:320px}
+
+/* v0.9.7 RC : diamètres de roue calculés */
+.diam-canvas{width:100%;height:300px;border:1px solid var(--border,#D7D7D7);border-radius:10px;margin-top:8px;background:#FFFFFF}
+.diam-table{border-collapse:collapse;margin:8px 0;font-size:13px}
+.diam-table th,.diam-table td{border:1px solid #D7D7D7;padding:4px 10px;text-align:center}
+.diam-table th{background:#FFFFFF}
+
+/* v0.9.7 RC : onglet Diagnostic et diamètres en direct */
+.diag-sources{margin:8px 0;font-size:13px;line-height:1.7}
+.diag-sources .diag-src{display:inline-block;margin:2px 8px 2px 0;padding:2px 10px;border-radius:999px;background:#FFFFFF;border:1px solid #D7D7D7}
+.diag-sources .diag-src.ok{background:#FFFFFF;border-color:#D7D7D7}
+.diam-live-box{margin-top:6px;padding:6px 10px;border-radius:8px;background:#FFFFFF;border:1px solid #D7D7D7;font-size:13px}
+.diam-live-box[data-state="fiable"]{background:#FFFFFF;border-color:#D7D7D7}
+.diam-live-box[data-state="correcte"]{background:#FFFFFF;border-color:#D7D7D7}
+
+@media print{html,body,main,#reportContainer{background:#FFFFFF!important}}
+
+.diam-origin{margin-top:6px;padding:4px 8px;border-radius:6px;background:#FFFFFF;border:1px solid #D7D7D7}
+.diam-origin[data-calc="1"]{background:#FFFFFF;border-color:#D7D7D7}
+.preco-table{border-collapse:collapse;width:100%;font-size:13px;margin:6px 0}
+.preco-table th,.preco-table td{border:1px solid #D7D7D7;padding:5px 8px;vertical-align:top;text-align:left}
+.preco-table th{background:#FFFFFF}
+.preco-niv{font-weight:700;white-space:nowrap}
+.preco-niv.depose{color:#D52B1E}.preco-niv.controle{color:#E05206}.preco-niv.orientation{color:#0088CE}.preco-niv.info{color:#009AA6}

@@ -1,0 +1,24 @@
+{
+  "id": "analyse-acoustique-tgv-v098-rust",
+  "name": "Analyse Acoustique TGV — v0.9.8 Rust",
+  "short_name": "TGV Rust",
+  "description": "Version 0.9.8 Rust (noyau de calcul Rust/WebAssembly) : analyse acoustique, acquisition GPS, diagramme de Campbell et comparaison traction / erre.",
+  "lang": "fr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EEF2F6",
+  "theme_color": "#6E1E78",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
