@@ -1,5 +1,5 @@
 /* Analyse Acoustique TGV — v0.9.8
- * Fréquences dominantes : quelles raies reviennent le plus, à quelle vitesse, dans quel
+ * Fréquences dominantes : quelles fréquences reviennent le plus, à quelle vitesse, dans quel
  * régime, et quelle est leur cause possible.
  * Lit les lignes du diagramme de Campbell (window.CampbellTGV._state.rows) : chaque ligne
  * porte la vitesse, le régime et le spectre sur une grille de 5 Hz (0–2 500 Hz).
@@ -11,20 +11,20 @@
  *   1. PICS : dans chaque ligne (spectre de 0,5 s), on garde jusqu'à 3 pics émergents entre
  *      100 et 2 500 Hz. L'émergence = niveau du pic − médiane du voisinage (±60 Hz) ; seuil 8 dB.
  *      La fréquence est affinée par interpolation parabolique.
- *   2. FAMILLES : on cherche les raies qui se répètent, de deux sortes :
+ *   2. FAMILLES : on cherche les fréquences qui se répètent, de deux sortes :
  *        - PROPORTIONNELLE à la vitesse (f = k × v) : signature d'un organe tournant ;
  *          on repère le rapport k = f / v le plus fréquent (tolérance ±3 %) ;
  *        - FIXE (f constante quelle que soit la vitesse) : électrique, auxiliaire, résonance.
  *      La famille qui totalise le plus d'émergence est la « dominante » ; ses points sont
  *      retirés et on cherche la suivante (4 au plus).
- *   3. VITESSE : plage où la raie apparaît (10 %–90 % des points) et vitesse du maximum.
- *   4. RÉGIMES : part des lignes de chaque régime, dans la même plage de vitesse, où la raie
+ *   3. VITESSE : plage où la fréquence apparaît (10 %–90 % des points) et vitesse du maximum.
+ *   4. RÉGIMES : part des lignes de chaque régime, dans la même plage de vitesse, où la fréquence
  *      est présente. Présente en traction/freinage et pas en érre = liée à la charge.
- *   5. CAUSE : pour une raie proportionnelle, on calcule le diamètre de roue qu'il faudrait
+ *   5. CAUSE : pour une fréquence proportionnelle, on calcule le diamètre de roue qu'il faudrait
  *      pour que chaque organe de la chaîne (engrènement réducteur, pont, harmoniques,
  *      rotation moteur / essieu) produise k × v. Un organe n'est retenu que si ce diamètre
  *      est physiquement possible (850–924 mm : roue usée à neuve).
- *      Pour une raie fixe, la cause est déduite du régime où elle est présente. */
+ *      Pour une fréquence fixe, la cause est déduite du régime où elle est présente. */
 
 (() => {
   const GRID_STEP = 5, GRID_N = 501, F_MIN = 100, F_MAX = 2500;
@@ -235,10 +235,10 @@
     const points = [];
     usable.forEach((u, i) => rowPeaks(u.spec).forEach((p) => points.push({ v: u.speed, f: p.f, db: p.db, em: p.em, w: Math.min(p.em, 25), row: i })));
     findFamilies(points, usable.length).forEach((fam, i) => { const d = describe(fam, usable); d.rank = i + 1; res.families.push(d); });
-    // deux raies du même organe avec des diamètres équivalents différents = deux essieux
+    // deux fréquences du même organe avec des diamètres équivalents différents = deux essieux
     res.families.forEach((d, i) => res.families.slice(0, i).forEach((e) => {
       if (d.organs[0] && e.organs[0] && d.organs[0].label === e.organs[0].label && Math.abs(d.organs[0].dEq - e.organs[0].dEq) > 15)
-        d.cause.push(`Même organe que la raie n°${e.rank}, avec un diamètre équivalent différent (${fmt(d.organs[0].dEq)} contre ${fmt(e.organs[0].dEq)} mm) : cohérent avec les <b>deux essieux E1 / E2</b>.`);
+        d.cause.push(`Même organe que la fréquence n°${e.rank}, avec un diamètre équivalent différent (${fmt(d.organs[0].dEq)} contre ${fmt(e.organs[0].dEq)} mm) : cohérent avec les <b>deux essieux E1 / E2</b>.`);
     }));
     return res;
   }
@@ -249,12 +249,12 @@
   const speedTxt = (d) => `${fmt(d.vLo)}–${fmt(d.vHi)} km/h<br>maximum vers ${fmt(d.vMax)} km/h (${fmt(d.fAtMax)} Hz)`;
   function html(res) {
     if (!res.families.length)
-      return `<p>Fréquences dominantes : ${res.nRows < 40 ? "pas assez de lignes avec vitesse (minimum 40 ; vitesse ≥ 15 km/h)." : "aucune raie ne se répète assez pour être retenue."}</p>`;
+      return `<p>Fréquences dominantes : ${res.nRows < 40 ? "pas assez de lignes avec vitesse (minimum 40 ; vitesse ≥ 15 km/h)." : "aucune fréquence ne se répète assez pour être retenue."}</p>`;
     const rows = res.families.map((d) => `<tr${d.rank === 1 ? ' class="dom-first"' : ""}><td>${d.rank === 1 ? "★ " : ""}${d.rank}</td><td>${freqTxt(d)}</td><td>${speedTxt(d)}</td><td>${regTxt(d.pct)}</td><td>${fmt(d.dbMed)} dB rel.</td><td>${d.cause.join("<br>")}</td></tr>`).join("");
     return `<style>.dom-table{border-collapse:collapse;width:100%;font-size:13px}.dom-table th,.dom-table td{border:1px solid #A0A0A0;padding:4px 6px;text-align:left;vertical-align:top}.dom-table th{background:#E1E1E1;color:#000}.dom-table tr.dom-first td{background:#F1E6F3;color:#000}</style>`
       + `<p class="small">${calcNote()}</p>`
       + `<table class="dom-table"><tr><th>#</th><th>Fréquence</th><th>Vitesse</th><th>Présence par régime</th><th>Niveau</th><th>Cause possible</th></tr>${rows}</table>`
-      + `<p class="small"><i>${res.nRows} lignes exploitées. La ★ est la raie qui totalise le plus d’émergence. Niveaux relatifs non calibrés ; causes à confirmer par les contrôles de maintenance.</i></p>`;
+      + `<p class="small"><i>${res.nRows} lignes exploitées. La ★ est la fréquence qui totalise le plus d’émergence. Niveaux relatifs non calibrés ; causes à confirmer par les contrôles de maintenance.</i></p>`;
   }
   function rowsForReport(res) {
     const strip = (s) => String(s).replace(/<br>/g, " ; ").replace(/<[^>]+>/g, "");

@@ -64,7 +64,7 @@
     const f = transmissionFrequencies(100, diameter);
     return f ? f[key] / 100 : null; // Hz par km/h
   }
-  // raie tonale : émergence ≥ 10 dB au-dessus du bruit voisin (ou, pour les anciens fichiers, rapport tonal ≥ 6 dB)
+  // fréquence tonale : émergence ≥ 10 dB au-dessus du bruit voisin (ou, pour les anciens fichiers, rapport tonal ≥ 6 dB)
   const isTonal = (r) => Number.isFinite(r.bandPeakHz) && (Number.isFinite(r.promDb) ? r.promDb >= 10 : Number.isFinite(r.tnrDb) && r.tnrDb >= 6);
   function currentRegime() { return $id("acqRegime")?.value || "Non renseigné"; }
 
@@ -91,7 +91,7 @@
     const binHz = (sr / 2 / n) * frequencyCalibrationFactorFor(sr);
     const level = (i) => (Number.isFinite(buf[i]) ? buf[i] : -160);
 
-    // 1. spectre ramené sur une grille fixe de 5 Hz (max des raies dans chaque case)
+    // 1. spectre ramené sur une grille fixe de 5 Hz (max des fréquences dans chaque case)
     const spec = new Float32Array(GRID_N);
     for (let g = 0; g < GRID_N; g++) {
       const f = g * GRID_STEP, half = Math.max(GRID_STEP / 2, binHz / 2);
@@ -472,9 +472,14 @@
     if (!rows.length) { message(canvas, H, state.rows.length ? "Aucune ligne avec vitesse pour ce filtre de régime." : "Diagramme de Campbell : en attente de données (acquisition ou import JSON)."); return; }
     const { ctx, w, h } = prepCanvas(canvas, H);
     const L = 58, R = 74, T = 26, B = 42, pw = w - L - R, ph = h - T - B;
-    const [vMin, vMax] = speedAxis(rows), [fMin, fMax] = freqRange();
+    const [vMin, vMax] = speedAxis(rows), [fMin0, fMax0] = freqRange();
+    // axe vertical : fréquence (Hz) ou ORDRE (Hz par km/h) — en ordre, les droites d'engrènement deviennent horizontales
+    const ordMode = ($id("campbellAxis")?.value || "freq") === "ordre";
+    const K0 = 2, K1 = 14, KSTEP = 0.02;
+    const fMin = ordMode ? 0 : fMin0, fMax = ordMode ? 2500 : fMax0;
     const nCol = Math.max(10, Math.min(pw, Math.round((vMax - vMin) / 1)));
-    const g0 = Math.round(fMin / GRID_STEP), g1 = Math.round(fMax / GRID_STEP), nRow = g1 - g0 + 1;
+    const g0 = Math.round(fMin / GRID_STEP), g1 = Math.round(fMax / GRID_STEP);
+    let nRow = g1 - g0 + 1;
     const acc = new Float64Array(nCol * nRow), cnt = new Uint32Array(nCol);
     rows.forEach((r) => {
       if (r.speed < vMin || r.speed > vMax) return;
@@ -482,53 +487,121 @@
       cnt[c]++;
       for (let g = g0; g <= g1; g++) acc[(g - g0) * nCol + c] += dbToPow(r.spec[g]);
     });
+    // niveau en dB de chaque case, puis pondération des couleurs (v1.5) :
+    //  « brut »  = niveau tel que mesuré (les basses fréquences dominent l'image) ;
+    //  « A »     = pondération A (réduit surtout < 500 Hz) ;
+    //  « fond »  = on retire, dans chaque colonne de vitesse, le fond local (médiane glissante ± 150 Hz) :
+    //              une ligne d'engrènement ressort de la même façon à 1 000 Hz et à 2 000 Hz.
+    const wmode = $id("campbellWeight")?.value || "fond";
+    const lv = new Float32Array(nCol * nRow);
+    for (let c = 0; c < nCol; c++) for (let k = 0; k < nRow; k++) lv[k * nCol + c] = cnt[c] ? powToDb(acc[k * nCol + c] / cnt[c]) : NaN;
+    if (wmode === "A") {
+      const aw = (f) => (typeof aWeightingCorrection === "function" ? aWeightingCorrection(f) : 0);
+      for (let k = 0; k < nRow; k++) { const a = aw((g0 + k) * GRID_STEP); for (let c = 0; c < nCol; c++) lv[k * nCol + c] += a; }
+    } else if (wmode === "fond") {
+      const half = Math.max(8, Math.round(150 / GRID_STEP)), tmp = [];
+      for (let c = 0; c < nCol; c++) {
+        if (!cnt[c]) continue;
+        const col = new Float32Array(nRow), base = new Float32Array(nRow);
+        for (let k = 0; k < nRow; k++) col[k] = lv[k * nCol + c];
+        for (let k = 0; k < nRow; k++) {
+          tmp.length = 0; for (let j = Math.max(0, k - half); j <= Math.min(nRow - 1, k + half); j += 2) if (Number.isFinite(col[j])) tmp.push(col[j]);
+          tmp.sort((a, b) => a - b); base[k] = tmp.length ? tmp[tmp.length >> 1] : 0;
+        }
+        for (let k = 0; k < nRow; k++) lv[k * nCol + c] = col[k] - base[k];
+      }
+    }
+    let lvF = lv;
+    if (ordMode) {                                   // rééchantillonnage : ligne = ordre k, fréquence = k × vitesse de la colonne
+      const nK = Math.round((K1 - K0) / KSTEP) + 1, lo = new Float32Array(nCol * nK).fill(NaN);
+      for (let c = 0; c < nCol; c++) {
+        if (!cnt[c]) continue;
+        const v = vMin + ((c + 0.5) / nCol) * (vMax - vMin);
+        for (let j = 0; j < nK; j++) {
+          const x = (K0 + j * KSTEP) * v / GRID_STEP, i0 = Math.floor(x);
+          if (i0 < 1 || i0 >= nRow - 1) continue;
+          const a = lv[i0 * nCol + c], b2 = lv[(i0 + 1) * nCol + c], wgt = x - i0;
+          if (Number.isFinite(a) && Number.isFinite(b2)) lo[j * nCol + c] = a * (1 - wgt) + b2 * wgt;
+        }
+      }
+      lvF = lo; nRow = nK;
+    }
+    const lv2 = lvF;
     const vals = [];
-    for (let c = 0; c < nCol; c++) if (cnt[c]) for (let k = 0; k < nRow; k++) vals.push(powToDb(acc[k * nCol + c] / cnt[c]));
+    for (let i = 0; i < lv2.length; i++) if (Number.isFinite(lv2[i])) vals.push(lv2[i]);
     vals.sort((a, b) => a - b);
-    const vTop = vals[Math.floor(vals.length * 0.995)] ?? 0, vBot = vTop - 45;
+    const span = wmode === "fond" ? 30 : 45;
+    const vTop = vals[Math.floor(vals.length * 0.995)] ?? 0, vBot = wmode === "fond" ? Math.max(-3, vTop - span) : vTop - span;
     const img = ctx.createImageData(nCol, nRow);
     for (let k = 0; k < nRow; k++) for (let c = 0; c < nCol; c++) {
       const p = ((nRow - 1 - k) * nCol + c) * 4;
-      if (!cnt[c]) { img.data[p] = 229; img.data[p + 1] = 231; img.data[p + 2] = 235; img.data[p + 3] = 255; continue; }
-      const col = cmap((powToDb(acc[k * nCol + c] / cnt[c]) - vBot) / (vTop - vBot));
+      if (!cnt[c] || !Number.isFinite(lv2[k * nCol + c])) { img.data[p] = 229; img.data[p + 1] = 231; img.data[p + 2] = 235; img.data[p + 3] = 255; continue; }
+      const col = cmap((lv2[k * nCol + c] - vBot) / (vTop - vBot));
       img.data[p] = col[0]; img.data[p + 1] = col[1]; img.data[p + 2] = col[2]; img.data[p + 3] = 255;
     }
     const off = document.createElement("canvas"); off.width = nCol; off.height = nRow;
     off.getContext("2d").putImageData(img, 0, 0);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(off, L, T, pw, ph);
-    const X = (v) => L + ((v - vMin) / (vMax - vMin)) * pw, Y = (f) => T + ph - ((f - fMin) / (fMax - fMin)) * ph;
+    const yLo = ordMode ? K0 : fMin, yHi = ordMode ? K1 : fMax;
+    const X = (v) => L + ((v - vMin) / (vMax - vMin)) * pw, Y = (u) => T + ph - ((u - yLo) / (yHi - yLo)) * ph;
+    const Yf = (f, v) => Y(ordMode ? f / v : f);        // pixel d'une fréquence f observée à la vitesse v
+    state.geom = { L, T, pw, ph, vMin, vMax };
 
     // bande de gêne
     ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
     ctx.setLineDash([5, 4]); ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 1;
-    BAND.forEach((f) => { if (f >= fMin && f <= fMax) { ctx.beginPath(); ctx.moveTo(L, Y(f)); ctx.lineTo(L + pw, Y(f)); ctx.stroke(); } });
+    BAND.forEach((f) => {
+      if (!ordMode) { if (f >= fMin && f <= fMax) { ctx.beginPath(); ctx.moveTo(L, Y(f)); ctx.lineTo(L + pw, Y(f)); ctx.stroke(); } }
+      else { ctx.beginPath(); let st = false; for (let i = 0; i <= 80; i++) { const v = vMin + ((vMax - vMin) * i) / 80, k = f / v; if (k < K0 || k > K1) { st = false; continue; } st ? ctx.lineTo(X(v), Y(k)) : (ctx.moveTo(X(v), Y(k)), st = true); } ctx.stroke(); }
+    });
     // droites théoriques d'engrènement
     if ($id("campbellTheory")?.checked !== false) {
       const c0 = cfg();
-      CHAINS.forEach((ch, ci) => c0.axles.forEach((ax) => {
-        const s = chainSlope(ch.key, ax.diameter);
-        ctx.setLineDash(ax.id === "E1" ? [] : [7, 4]); ctx.lineWidth = ci === 0 ? 2 : 1.3;
-        ctx.strokeStyle = ax.id === "E1" ? "#009AA6" : "#E05206";
-        ctx.globalAlpha = ci === 0 ? 0.95 : 0.6;
-        ctx.beginPath(); ctx.moveTo(X(vMin), Y(s * vMin)); ctx.lineTo(X(vMax), Y(s * vMax)); ctx.stroke();
-        const fEnd = s * vMax;
+      // droites d'engrènement et harmoniques : réducteur ×1, ×2 (et ×3, ×4) ; pont ×1 (et ×2, ×3) si « Harmoniques ×1…×4 » est coché
+      const harm = $id("campbellHarm")?.checked;
+      const items = [];
+      c0.axles.forEach((ax) => {
+        const sR = chainSlope("meshReducer", ax.diameter), sB = chainSlope("meshBridge", ax.diameter);
+        (harm ? [1, 2, 3, 4] : [1, 2]).forEach((m) => items.push({ ax, s: m * sR, m, nm: "Réd.", w: m === 1 ? 2 : 1.5, al: m === 1 ? 0.95 : 0.8 }));
+        (harm ? [1, 2, 3] : [1]).forEach((m) => items.push({ ax, s: m * sB, m, nm: "Pont", w: m === 1 ? 1.3 : 1.1, al: 0.6 }));
+      });
+      items.forEach((it) => {
+        const { ax, s } = it, col = ax.id === "E1" ? "#009AA6" : "#E05206";
+        ctx.setLineDash(ax.id === "E1" ? [] : [7, 4]); ctx.lineWidth = it.w; ctx.strokeStyle = col; ctx.globalAlpha = it.al;
+        ctx.beginPath(); ctx.moveTo(X(vMin), Yf(s * vMin, vMin)); ctx.lineTo(X(vMax), Yf(s * vMax, vMax)); ctx.stroke();
         let lx, ly;
-        if (fEnd <= fMax) { lx = X(vMax) - 4; ly = Y(fEnd); } else { lx = X(fMax / s) - 4; ly = T + 12; }
-        ctx.globalAlpha = 1; ctx.setLineDash([]); ctx.fillStyle = ax.id === "E1" ? "#009AA6" : "#E05206"; ctx.textAlign = "right";
-        // v0.9.7 RC : diamètre de chaque droite affiché (calculé à partir du sifflement si disponible)
-        ctx.fillText(`${ci === 0 ? "Réd." : "Pont"} ${ax.id} Ø${fmt(ax.diameter)}`, lx, ly - 4 + (ax.id === "E2" ? 14 : 0)); ctx.textAlign = "left";
-      }));
+        if (ordMode) { lx = X(vMax) - 4; ly = Y(s); if (s < K0 || s > K1) return; }
+        else { const fEnd = s * vMax; if (fEnd <= fMax) { lx = X(vMax) - 4; ly = Y(fEnd); } else { lx = X(fMax / s) - 4; ly = T + 12; } }
+        ctx.globalAlpha = 1; ctx.setLineDash([]); ctx.fillStyle = col; ctx.textAlign = "right";
+        const ds = c0.axles.map((x) => x.diameter), same = ds.length > 1 && Math.abs(ds[0] - ds[1]) / ((ds[0] + ds[1]) / 2) < 0.015;
+        if (same && ax.id === "E2") { ctx.textAlign = "left"; return; }          // deux essieux quasi identiques : une seule étiquette
+        const lab = `${it.nm}${it.m > 1 ? " ×" + it.m : ""} ${same ? "E1/E2" : ax.id} Ø${fmt(ax.diameter)}` + (ordMode ? ` (${fmt(s, 2)})` : "");
+        ctx.fillText(lab, lx, ly - 4 + (ax.id === "E2" ? 14 : 0)); ctx.textAlign = "left";
+      });
       ctx.globalAlpha = 1;
       const calc = window.DiametresTGV?.calculated?.();
       ctx.fillStyle = "#FFFFFF"; ctx.font = "12px Segoe UI, system-ui, sans-serif";
       ctx.fillText(calc ? `Droites tracées avec les diamètres CALCULÉS : E1 Ø${fmt(c0.diameter1)} / E2 Ø${fmt(c0.diameter2)} mm (à vérifier dans SI-Essieux)` : `Droites tracées avec les diamètres de réglage (non calculés) : E1 Ø${fmt(c0.diameter1)} / E2 Ø${fmt(c0.diameter2)} mm`, L + 8, T + ph - 8);
     }
     const d = state.diag;
-    if (d?.resonance && Number.isFinite(d.resonance.f) && d.resonance.f >= fMin && d.resonance.f <= fMax) {
+    if (d?.resonance && Number.isFinite(d.resonance.f) && d.resonance.f >= fMin0 && d.resonance.f <= fMax0 && (!ordMode || (d.resonance.f / d.resonance.v >= K0 && d.resonance.f / d.resonance.v <= K1))) {
       ctx.setLineDash([]); ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(X(d.resonance.v), Y(d.resonance.f), 9, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(X(d.resonance.v), Yf(d.resonance.f, d.resonance.v), 9, 0, Math.PI * 2); ctx.stroke();
+      // à quelle droite théorique appartient ce point ? (écart de pente ≤ 2 %)
+      try {
+        const kk = d.resonance.f / d.resonance.v; let best = null;
+        cfg().axles.forEach((ax) => [["meshReducer", 1, "réducteur"], ["meshReducer", 2, "réducteur ×2"], ["meshBridge", 1, "pont"], ["meshBridge", 2, "pont ×2"]].forEach(([key, m, nm]) => {
+          const e = Math.abs(kk - m * chainSlope(key, ax.diameter)) / kk; if (e <= 0.02 && (!best || e < best.e)) best = { e, nm };
+        }));
+        const txt = `niveau max dans la bande : ${fmt(d.resonance.v)} km/h, ${fmt(d.resonance.f)} Hz — ` + (best ? best.nm : "aucun organe connu");
+        ctx.font = "12px Segoe UI, system-ui, sans-serif"; ctx.textAlign = "left"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.7)";
+        const tx = Math.min(X(d.resonance.v) + 14, L + pw - ctx.measureText(txt).width - 6), ty = Yf(d.resonance.f, d.resonance.v) - 14;
+        ctx.strokeText(txt, tx, ty); ctx.fillStyle = "#FFFFFF"; ctx.fillText(txt, tx, ty);
+      } catch (e) { /* étiquette facultative */ }
     }
+    // vitesse de coupe choisie par un clic : ligne jaune pointillée (le spectre à cette vitesse est dans « Spectre différentiel »)
+    { const sv = parseFloat($id("campbellDiffSpeed")?.value); if (Number.isFinite(sv) && sv >= vMin && sv <= vMax) { ctx.setLineDash([3, 3]); ctx.strokeStyle = "#FFB612"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(X(sv), T); ctx.lineTo(X(sv), T + ph); ctx.stroke(); ctx.setLineDash([]); } }
     ctx.restore();
 
     // axes
@@ -536,19 +609,20 @@
     ctx.fillStyle = "#3C3732";
     const vStep = vMax - vMin > 150 ? 50 : 25;
     for (let v = Math.ceil(vMin / vStep) * vStep; v <= vMax; v += vStep) { ctx.fillText(String(v), X(v) - 10, T + ph + 16); }
-    const fStep = fMax - fMin > 1200 ? 500 : fMax - fMin > 600 ? 200 : 100;
-    for (let f = Math.ceil(fMin / fStep) * fStep; f <= fMax; f += fStep) ctx.fillText(String(f), 8, Y(f) + 4);
+    if (ordMode) { for (let k = K0; k <= K1; k += 2) ctx.fillText(String(k), 14, Y(k) + 4); }
+    else { const fStep = fMax - fMin > 1200 ? 500 : fMax - fMin > 600 ? 200 : 100;
+      for (let f = Math.ceil(fMin / fStep) * fStep; f <= fMax; f += fStep) ctx.fillText(String(f), 8, Y(f) + 4); }
     ctx.fillText("Vitesse (km/h)", L + pw / 2 - 40, h - 8);
-    ctx.save(); ctx.translate(14, T + ph / 2 + 30); ctx.rotate(-Math.PI / 2); ctx.fillText("Fréquence (Hz)", 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(14, T + ph / 2 + 30); ctx.rotate(-Math.PI / 2); ctx.fillText(ordMode ? "Ordre (Hz par km/h)" : "Fréquence (Hz)", 0, 0); ctx.restore();
     ctx.font = "13px Segoe UI, system-ui, sans-serif"; ctx.fillStyle = "#3C3732";
     const filt = $id("campbellRegimeFilter")?.value;
-    ctx.fillText(w < 560 ? `Campbell — ${filt || "tous régimes"}` : `Diagramme de Campbell — ${filt || "tous régimes"} — ${rows.length} lignes`, L, T - 9);
+    ctx.fillText(w < 560 ? `Campbell — ${filt || "tous régimes"}` : `Diagramme de Campbell — ${filt || "tous régimes"} — ${rows.length} lignes — cliquer = spectre à cette vitesse`, L, T - 9);
     // échelle de couleur
     const cbX = L + pw + 14, cbW = 14;
     for (let y = 0; y < ph; y++) { const col = cmap(1 - y / ph); ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; ctx.fillRect(cbX, T + y, cbW, 1); }
     ctx.strokeStyle = "#3C3732"; ctx.strokeRect(cbX, T, cbW, ph);
     ctx.font = "11px Segoe UI, system-ui, sans-serif"; ctx.fillStyle = "#3C3732";
-    ctx.fillText(fmt(vTop) , cbX + cbW + 3, T + 9); ctx.fillText(fmt(vBot), cbX + cbW + 3, T + ph); ctx.fillText("dB rel.", cbX - 4, T - 9);
+    ctx.fillText(fmt(vTop) , cbX + cbW + 3, T + 9); ctx.fillText(fmt(vBot), cbX + cbW + 3, T + ph); ctx.fillText(wmode === "fond" ? "dB / fond" : wmode === "A" ? "dB(A) rel." : "dB rel.", cbX - 4, T - 9);
   }
 
   function drawLevelSpeed() {
@@ -665,6 +739,20 @@
     } catch (error) { console.error("Campbell", error); setInfo("Erreur d’affichage Campbell : " + (error?.message || error), true); }
     state.lastRender = performance.now();
   }
+  /* coupe : un clic sur le diagramme fixe la vitesse du « Spectre différentiel » (traction / érre / différence) */
+  function initSectionClick() {
+    const cv = $id("campbellCanvas"); if (!cv || cv._sectionOk) return; cv._sectionOk = true;
+    cv.style.cursor = "crosshair";
+    cv.addEventListener("click", (ev) => {
+      const g = state.geom; if (!g) return;
+      const r = cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+      if (x < g.L || x > g.L + g.pw || y < g.T || y > g.T + g.ph) return;
+      const v = Math.round(g.vMin + ((x - g.L) / g.pw) * (g.vMax - g.vMin));
+      const inp = $id("campbellDiffSpeed"); if (inp) inp.value = String(v);
+      renderAll(true);
+      try { $id("campbellDiffCanvas")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) { /* ignore */ }
+    });
+  }
   function setInfo(text, error = false) { const el = $id("campbellInfo"); if (el) { el.textContent = text; el.classList.toggle("status-error", error); } }
 
   /* ---------- régime horodaté ---------- */
@@ -731,9 +819,10 @@
       const map = { t: "Traction", e: "Erre", f: "Freinage", s: "Statique" }, reg = map[e.key?.toLowerCase()];
       if (reg) { setRegime(reg); e.preventDefault(); }
     });
-    ["campbellRegimeFilter", "campbellRange", "campbellTheory", "campbellIndicator", "campbellDiffSpeed", "campbellDiffTol"].forEach((id) => $id(id)?.addEventListener("change", () => renderAll(true)));
+    ["campbellRegimeFilter", "campbellRange", "campbellWeight", "campbellAxis", "campbellHarm", "campbellTheory", "campbellIndicator", "campbellDiffSpeed", "campbellDiffTol"].forEach((id) => $id(id)?.addEventListener("change", () => renderAll(true)));
     ["transWheelDiameter1", "transWheelDiameter2", "transReference"].forEach((id) => $id(id)?.addEventListener("change", () => renderAll(true)));
     $id("campbellRefresh")?.addEventListener("click", () => renderAll(true));
+    initSectionClick();
     $id("campbellExportCsv")?.addEventListener("click", exportIndicatorsCsv);
     $id("campbellExportPng")?.addEventListener("click", exportPng);
     $id("campbellImportButton")?.addEventListener("click", () => $id("campbellImportFile").click());

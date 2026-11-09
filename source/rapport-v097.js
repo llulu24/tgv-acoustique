@@ -91,7 +91,7 @@
     return { rows, dt, duration: rows.length * dt, vMin: vs.length ? Math.min(...vs) : NaN, vMax: vs.length ? Math.max(...vs) : NaN, bins, tot, ref, spectra };
   }
 
-  /* ---------- 2 bis. raies fixes et préconisations ---------- */
+  /* ---------- 2 bis. fréquences fixes et préconisations ---------- */
   // Bips VACMA (veille automatique de la cabine) : son bref à 1 875 Hz (harmoniques de 312,5 Hz :
   // 625, 937, 1 562 Hz), répété toutes les 30 s environ, présent aussi à l'arrêt. Reconnu le
   // 30/10/2026 (confirmé par le conducteur / l'agent d'accompagnement). Il est signalé puis exclu
@@ -116,7 +116,7 @@
   // fréquence au-dessus de son voisinage (médiane ±60 Hz, hors ±10 Hz).
   function emergenceSpectrum(rows, idx) {
     // spectre MÉDIAN (et non moyenne d'énergie) : un son bref et fort (bip VACMA, choc) ne doit
-    // pas passer pour une raie permanente
+    // pas passer pour une fréquence permanente
     const n = rows[0].spec.length, sp = new Float64Array(n), col = new Float64Array(idx.length), e = new Float64Array(n);
     for (let k = 0; k < n; k++) { idx.forEach((i, j) => (col[j] = rows[i].spec[k])); const c = Array.from(col).sort((a, b) => a - b); sp[k] = c[c.length >> 1]; }
     for (let k = 0; k < n; k++) {
@@ -126,7 +126,7 @@
     return e;
   }
   // Fréquences FIXES : émergentes (médiane ≥ 5 dB, ≥ 4 dB dans 60 % des tranches) dans au moins
-  // 3 tranches de vitesse de 20 km/h couvrant 60 km/h ou plus. Une raie qui suit la vitesse
+  // 3 tranches de vitesse de 20 km/h couvrant 60 km/h ou plus. Une fréquence qui suit la vitesse
   // (engrènement) change de fréquence d'une tranche à l'autre et n'est donc pas retenue.
   function fixedLines() {
     const rows = camp().rows; if (rows.length < 200) return [];
@@ -201,6 +201,7 @@
       else list.push({ niv: "depose", titre: `Préconisation de dépose du GMR${loud.length > 1 ? (i ? " (priorité 2)" : " (priorité 1)") : ""}`, constat,
         action: `Dépose du groupe motoréducteur (GMR) de l’essieu de diamètre ≈ ${fmt(a.d, 0)} mm. Identifier cet essieu dans SI-Essieux parmi les deux essieux de tête (correspondance des diamètres) avant l’intervention.` });
     });
+    if (found.length === 1) list.filter((x) => x.niv === "depose").forEach((x) => { x.action += " Attention : les deux essieux ont des diamètres trop proches (moins de 1,5 %) pour être distingués au son. Le son ne désigne ni l’essieu A ni l’essieu B : avant de déposer un GMR, localiser par une mesure près de chaque réducteur (micro ou accéléromètre sur chaque carter, en traction stable)."; });
     medium.forEach((a) => list.push({ niv: "controle", titre: "Surveillance du GMR",
       constat: `Sifflement d’engrènement du réducteur marqué (émergence ${fmt(a.em)} dB) sur l’essieu de diamètre ≈ ${fmt(a.d, 0)} mm.`,
       action: "Pas de dépose sur ce seul critère : nouvelle mesure lors d’un prochain accompagnement et contrôle du GMR à la prochaine opération de maintenance (état de denture, roulements, huile)." }));
@@ -345,6 +346,11 @@
       const enq = window.EnqueteTGV?.reportParts?.();
       if (enq) {
         s1.appendChild(note("<b>Enquête : verdict</b><br>" + esc(enq.head) + "<br>" + enq.lines.map(esc).join("<br>")));
+        if (enq.rel) {
+          s1.appendChild(note("<b>Fiabilité du verdict : confiance " + esc(enq.rel.level) + "</b><br>" + esc(enq.rel.desig)));
+          s1.appendChild(table(["Critère", "Constat", "État"], enq.rel.crit));
+          if (enq.rel.need.length) s1.appendChild(note("<b>Pour fiabiliser :</b><br>" + enq.rel.need.map(esc).join("<br>")));
+        }
         if (enq.suspects.length) s1.appendChild(table(["Piste", "Indice /100", "Preuves"], enq.suspects.map((r) => [r[0], String(r[1]), r[2]])));
         enq.imgs.forEach(([t, url]) => { s1.appendChild(note("<b>" + esc(t) + "</b>")); s1.appendChild(createReportImage(url, t)); });
       }

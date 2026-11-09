@@ -40,6 +40,7 @@
   document.body.appendChild(backTop);
 
   function currentMode(){
+    if(!document.getElementById("lecteurMode")?.classList.contains("hidden"))return "lecteur";
     if(!document.getElementById("diagnosticMode")?.classList.contains("hidden"))return "diagnostic";
     return document.getElementById("analysisMode")?.classList.contains("hidden")?"acquisition":"analysis";}
   function updateNav(){
@@ -50,6 +51,7 @@
   document.getElementById("modeAnalysis")?.addEventListener("click",()=>setTimeout(updateNav,0));
   document.getElementById("modeAcquisition")?.addEventListener("click",()=>setTimeout(updateNav,0));
   document.getElementById("modeDiagnostic")?.addEventListener("click",()=>setTimeout(updateNav,0));
+  document.getElementById("modeLecteur")?.addEventListener("click",()=>setTimeout(updateNav,0));
   updateNav();
 
   const collapsibles=[

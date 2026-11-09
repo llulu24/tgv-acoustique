@@ -1,9 +1,9 @@
-/* Analyse Acoustique TGV — v0.9.9 Diagnostic
+/* Analyse Acoustique TGV — v1.1 Diagnostic (fiabilité du verdict)
  * « Enquête » : un verdict, des suspects classés avec leurs preuves, et deux graphiques faits
  * pour répondre à la question du conducteur : « quel bruit, à quelle vitesse, et pourquoi ? »
  *
  *  1. Verdict       : suspect n°1, vitesse la plus gênante, niveau de confiance, contrôle à faire.
- *  2. Suspects      : chaque raie dominante reçoit un indice de présomption (0–100) construit
+ *  2. Suspects      : chaque fréquence dominante reçoit un indice de présomption (0–100) construit
  *                     sur 4 preuves : elle traverse 1500–1700 Hz, elle dépend de la charge
  *                     (forte en traction, faible en érre), son diamètre équivalent correspond à
  *                     un essieu calculé, et son poids dans l'énergie.
@@ -63,13 +63,16 @@
     list.forEach((u) => { for (let i = 0; i < n; i++) { const v = u.r.spec[i]; if (Number.isFinite(v)) { acc[i] += Math.pow(10, v / 10); cnt[i]++; } } });
     return Array.from(acc, (a, i) => (cnt[i] ? 10 * Math.log10(a / cnt[i]) : NaN));
   }
+  /* vitesses réelles des lignes retenues : la fenêtre est centrée sur vc, mais les lignes peuvent être
+   * toutes d'un seul côté (ex. 290–300 km/h pour une fenêtre 270–300) : les repères doivent suivre les lignes. */
+  function spd(list) { const v = list.map((u) => u.v).sort((a, b) => a - b); return v.length ? { vm: v.reduce((a, b) => a + b, 0) / v.length, vlo: v[Math.floor(0.05 * (v.length - 1))], vhi: v[Math.ceil(0.95 * (v.length - 1))] } : {}; }
   function windowSpectra(use, vc) {
     let half = 15, out = null;
     for (; half <= 30; half += 15) {
       const inW = use.filter((u) => Math.abs(u.v - vc) <= half);
       const tr = inW.filter((u) => u.reg === "Traction"), er = inW.filter((u) => u.reg === "Erre");
-      if (tr.length >= 3 && er.length >= 3) { out = { vc, half, nT: tr.length, nE: er.length, tr: meanSpec(tr), er: meanSpec(er) }; break; }
-      if (half === 30) out = { vc, half, nT: tr.length, nE: er.length, tr: tr.length >= 3 ? meanSpec(tr) : null, er: er.length >= 3 ? meanSpec(er) : null };
+      if (tr.length >= 3 && er.length >= 3) { out = { vc, half, nT: tr.length, nE: er.length, tr: meanSpec(tr), er: meanSpec(er), ...spd(tr) }; break; }
+      if (half === 30) out = { vc, half, nT: tr.length, nE: er.length, tr: tr.length >= 3 ? meanSpec(tr) : null, er: er.length >= 3 ? meanSpec(er) : null, ...spd(tr) };
     }
     if (out && out.tr && out.er) {
       out.diff = out.tr.map((v, i) => v - out.er[i]);
@@ -83,7 +86,7 @@
     return out;
   }
 
-  /* Spectre par ordre : l'axe est f / v (Hz par km/h). Une raie d'engrènement proportionnelle à la
+  /* Spectre par ordre : l'axe est f / v (Hz par km/h). Une fréquence d'engrènement proportionnelle à la
    * vitesse y reste FINE (au lieu de s'étaler de ±6 % sur une moyenne en fréquence) et tombe sur
    * 5,81 × 900 / D : le repère E1 / E2 doit donc coïncider avec le pic. */
   const K0 = 4.0, K1 = 7.4, KS = 0.02;
@@ -101,7 +104,7 @@
     if (o.er) o.diff = o.tr.map((v, j) => v - o.er[j]);
     return o;
   }
-  /* Attribution des raies gênantes : chaque ligne dont le pic de 1500–1700 Hz émerge de ≥ 8 dB est
+  /* Attribution des fréquences gênantes : chaque ligne dont le pic de 1500–1700 Hz émerge de ≥ 8 dB est
    * rapprochée de l'organe dont la fréquence théorique (à la vitesse de la ligne) est à moins de 1,2 %. */
   const TOLK = 0.012, EM_LOUD = 8;
   function organList(axles) {
@@ -144,8 +147,18 @@
     try { return getTransmissionConfig().axles.map((a) => ({ id: a.id, d: a.diameter, calc: false })); } catch (e) { return []; }
   }
 
-  /* repères du graphique : diamètres calculés, sinon diamètres déduits des raies, sinon réglages */
-  function markAxles() {
+  /* deux essieux dont les diamètres diffèrent de moins de 1,5 % ont des fréquences indiscernables (≈ 4 Hz d'écart
+   * à 1 700 Hz, moins que le lissage dû à la vitesse) : on les traite comme un seul groupe, pour ne pas
+   * attribuer arbitrairement le bruit à l'un des deux. */
+  const CLOSE = 0.015;
+  function mergeClose(list) {
+    if (list.length === 2 && Math.abs(list[0].d - list[1].d) / ((list[0].d + list[1].d) / 2) < CLOSE)
+      return [{ id: "E1/E2", d: (list[0].d + list[1].d) / 2, src: list[0].src, merged: true }];
+    return list;
+  }
+  /* repères du graphique : diamètres calculés, sinon diamètres déduits des fréquences, sinon réglages */
+  function markAxles() { return mergeClose(markAxlesRaw()); }
+  function markAxlesRaw() {
     const c = calc(); if (c) return c.axles.map((a) => ({ id: a.id, d: a.d, src: "calculé" }));
     try {
       const fams = (window.DominanteTGV && window.DominanteTGV.last && window.DominanteTGV.last.families) || [], ds = [];
@@ -162,13 +175,13 @@
       let name, axle = null, diamTxt = "";
       if (d.type === "fixe") {
         const mult = d.fMed / 50, isMult = Math.abs(mult - Math.round(mult)) * 50 <= 3 && Math.round(mult) >= 1;
-        name = Math.abs(d.fMed - 1875) <= 15 ? "Bip VACMA (1 875 Hz)" : `Raie fixe ${fmt(d.fMed)} Hz${isMult ? ` (≈ ${Math.round(mult)} × 50 Hz : auxiliaire réseau 50 Hz ?)` : ""}`;
+        name = Math.abs(d.fMed - 1875) <= 15 ? "Bip VACMA (1 875 Hz)" : `Fréquence fixe ${fmt(d.fMed)} Hz${isMult ? ` (≈ ${Math.round(mult)} × 50 Hz : auxiliaire réseau 50 Hz ?)` : ""}`;
       } else if (d.organs && d.organs.length) {
         const o = d.organs[0];
         const best = ax.map((a) => ({ a, e: Math.abs(a.d - o.dEq) })).sort((x, y) => x.e - y.e)[0];
         if (best && best.e <= Math.max(5, 0.015 * best.a.d)) { axle = best.a; diamTxt = `${axle.id} Ø${fmt(axle.d)} mm (${axle.src})`; }
         name = `${o.label.replace(/ \(.*?\)/, "")} — Ø équivalent ${fmt(o.dEq)} mm${axle ? " → " + diamTxt : ""}`;
-      } else name = `Raie ${fmt(d.fMed)} Hz suivant la vitesse (organe non identifié)`;
+      } else name = `Fréquence ${fmt(d.fMed)} Hz suivant la vitesse (organe non identifié)`;
       const overlap = d.fType === "fixe" || d.type === "fixe" ? (d.fMed >= BAND[0] && d.fMed <= BAND[1] ? 1 : 0)
         : (d.fHi >= BAND[0] && d.fLo <= BAND[1] ? 1 : d.bandCross ? 0.6 : 0);
       const loadS = d.load === "charge" ? 1 : d.load === "indep" ? 0.2 : d.load === "erre" ? 0 : 0.5;
@@ -194,26 +207,78 @@
     return out.sort((a, b) => b.score - a.score);
   }
 
+
+  /* ---------- fiabilité du verdict (v1.1) ----------
+   * Chaque critère vaut 2 (solide), 1 (limite) ou 0 (insuffisant). Le niveau global est le plus bas de
+   * l'indice de présomption du suspect n°1 et du bilan des critères : on ne peut pas être « élevé » avec
+   * des données trop courtes, même si le suspect semble évident.                                        */
+  const LV = ["faible", "moyenne", "élevée"];
+  function reliability(res, sus) {
+    const crit = [], need = [];
+    const add = (name, pts, detail, fix) => { crit.push({ name, pts, detail }); if (pts < 2 && fix) need.push(fix); };
+    const n = res.n || 0, use = res.use || [];
+    add("Quantité de données", n >= 200 ? 2 : n >= 60 ? 1 : 0, `${n} lignes avec vitesse (≥ 20 km/h)`, "enregistrer plus longtemps à vitesse stable ou variable (idéalement ≥ 200 lignes)");
+    const vs = use.map((u) => u.v), span = vs.length ? Math.max(...vs) - Math.min(...vs) : 0;
+    add("Plage de vitesse", span >= 80 ? 2 : span >= 40 ? 1 : 0, vs.length ? `${fmt(Math.min(...vs))} à ${fmt(Math.max(...vs))} km/h (${fmt(span)} km/h d’écart)` : "aucune vitesse exploitable", "couvrir au moins 40 km/h d’écart (accélération ou ralentissement) pour distinguer une fréquence liée à la vitesse d’une fréquence fixe");
+    const nT = use.filter((u) => u.reg === "Traction").length, nE = use.filter((u) => u.reg === "Erre").length, nQ = use.filter((u) => u.reg === "?").length;
+    add("Traction et érre renseignées", nT >= 30 && nE >= 10 ? 2 : nT >= 15 && nE >= 5 ? 1 : 0, `${nT} lignes traction, ${nE} érre`, "marquer le régime (traction / érre) pendant l’acquisition : sans érre, on ne sait pas ce qui dépend de la charge");
+    add("Régimes connus", n && nQ / n <= 0.1 ? 2 : n && nQ / n <= 0.3 ? 1 : 0, `${fmt(n ? 100 * nQ / n : 0)} % des lignes sans régime`, "renseigner le régime sur toute la mesure");
+    const w = res.worst, em = w && Number.isFinite(w.em) ? w.em : NaN;
+    add("Émergence du bruit", em >= 10 ? 2 : em >= 6 ? 1 : 0, Number.isFinite(em) ? `+${fmt(em, 1)} dB dans 1500–1700 Hz` : "non mesurable", "refaire la mesure au moment où le conducteur entend le bruit");
+    const ax = markAxles(), src = ax[0] && ax[0].src, merged = ax.some((a) => a.merged || a.id === "E1/E2");
+    add("Diamètres de roue", src === "calculé" ? 2 : src === "déduit" ? 1 : 0, src === "calculé" ? "calculés à partir du sifflement" : src === "déduit" ? "déduits des fréquences" : "valeurs de réglage non vérifiées", "lancer le calcul des diamètres (onglet Diagnostic) avant de conclure");
+    const at = res.attr && res.attr.Traction;
+    if (at && at.n >= 20) add("Lignes expliquées", at.unShare <= 0.3 ? 2 : at.unShare <= 0.6 ? 1 : 0, `${fmt(100 * (1 - at.unShare))} % des lignes bruyantes en traction rapprochées d’un organe`, `${fmt(100 * at.unShare)} % des lignes bruyantes ne correspondent à aucun organe connu : chercher une autre source (voir les fréquences fixes)`);
+    else add("Lignes expliquées", 0, `seulement ${at ? at.n : 0} lignes bruyantes en traction (20 minimum)`, "plus de lignes bruyantes en traction sont nécessaires pour attribuer le bruit");
+    const gap = sus.length > 1 ? sus[0].score - sus[1].score : sus.length ? 30 : 0;
+    add("Suspect n°1 bien séparé", gap >= 15 ? 2 : gap >= 6 ? 1 : 0, sus.length > 1 ? `${gap} points d’avance sur le n°2` : sus.length ? "seul suspect" : "aucun suspect", "deux pistes proches : une seconde mesure à une autre vitesse les départagera");
+    const sum = crit.reduce((a, c) => a + c.pts, 0), bad = crit.filter((c) => c.pts === 0).length, ratio = sum / (2 * crit.length);
+    const lvCrit = ratio >= 0.8 && bad === 0 ? 2 : ratio >= 0.5 && bad <= 1 ? 1 : 0;
+    const top = sus[0], lvScore = top ? (top.score >= 75 ? 2 : top.score >= 55 ? 1 : 0) : 0;
+    const lv = Math.min(lvCrit, lvScore);
+    // capacité à désigner l'essieu : impossible si les diamètres sont trop proches
+    const desig = merged ? { ok: false, txt: "Le son ne permet pas de désigner l’essieu A ou B : les deux diamètres sont presque identiques (écart < 1,5 %). Contrôler les deux réducteurs, ou mesurer près de chacun." }
+      : ax.length > 1 ? { ok: true, txt: "Les deux essieux ont des diamètres assez différents pour être distingués au son. L’ordre E1 / E2 par rapport à la position dans la motrice reste à confirmer sur place." }
+      : { ok: false, txt: "Un seul diamètre exploitable : l’essieu ne peut pas être désigné." };
+    return { level: LV[lv], lv, crit, need, ratio, desig, limitedBy: lvCrit < lvScore ? "données" : lvScore < lvCrit ? "suspect" : null };
+  }
+
   /* ---------- verdict ---------- */
   function actionFor(s) {
     const d = s.d;
     if (d.type === "fixe") return Math.abs(d.fMed - 1875) <= 15 ? "Exclure le bip VACMA du diagnostic." : "Source indépendante de la vitesse : relever la fréquence exacte, comparer avec les auxiliaires (ventilation, compresseur, climatisation) en les arrêtant tour à tour.";
     const lab = d.organs && d.organs[0] ? d.organs[0].label : "";
-    const ess = s.axle ? s.axle.id : "l’essieu concerné";
+    const ess = s.axle ? (s.axle.merged ? "l’un des deux essieux (diamètres trop proches pour être distingués au son : mesurer près de chaque réducteur)" : s.axle.id) : "l’essieu concerné";
     if (/réducteur/.test(lab)) return `Contrôler le réducteur de ${ess} : état de denture et jeu d’engrènement, niveau et état de l’huile (écoute en charge).`;
     if (/pont/.test(lab)) return `Contrôler le pont de ${ess} : couple conique/denture et roulements.`;
     if (/moteur/.test(lab)) return `Contrôler le moteur de ${ess} : roulements, accouplement.`;
     return "Confirmer l’organe par une seconde mesure à vitesse variable (≥ 40 km/h d’écart).";
   }
-  function verdict(res, sus) {
+  function verdict(res, sus, rel) {
     const w = res.worst, sp = res.spectra, top = sus[0];
     const lines = [];
     let head;
     if (!w || !Number.isFinite(w.em)) head = "Pas assez de données avec vitesse pour conclure (30 lignes minimum à plus de 20 km/h).";
     else if (w.em < 6) head = `Aucune émergence nette dans 1500–1700 Hz (maximum +${fmt(w.em, 1)} dB à ${fmt(w.v)} km/h).`;
     else head = `Le bruit de 1500–1700 Hz émerge de <b>+${fmt(w.em, 1)} dB</b> vers <b>${fmt(w.v)} km/h</b> (${LABEL[w.g].toLowerCase()}).`;
+    // deux vitesses gênantes : l'émergence maximale et le bruit le plus fréquent peuvent venir de deux fréquences d'un même organe
+    try {
+      const atT = res.attr && res.attr.Traction, topA = atT && atT.n >= 20 && atT.items[0];
+      if (w && Number.isFinite(w.em) && w.em >= 6 && topA && topA.share >= 0.15) {
+        const near = (res.use || []).filter((u) => u.reg === w.g && Math.abs(u.v - w.v) <= 5 && u.em >= EM_LOUD);
+        if (near.length >= 3) {
+          const fm = median(near.map((u) => u.fpk)), vm = median(near.map((u) => u.v));
+          let bo = null; organList(markAxles()).forEach((o) => { const e = Math.abs(fm - o.k * vm) / fm; if (e <= 0.02 && (!bo || e < bo.e)) bo = { o, e }; });
+          const vMid = (topA.vLo + topA.vHi) / 2;
+          if (bo && Math.abs(vMid - w.v) > 30 && (bo.o.kind !== topA.o.kind || bo.o.mult !== topA.o.mult)) {
+            const same = bo.o.kind === topA.o.kind && bo.o.axle.id === topA.o.axle.id;
+            lines.push(`<b>Deux vitesses gênantes.</b> Vers <b>${fmt(w.v)} km/h</b>, le bruit ressort le plus fort (+${fmt(w.em, 1)} dB) à ≈ ${fmt(fm)} Hz : c’est ${esc(bo.o.label)} (${near.length} lignes seulement). Vers <b>${fmt(topA.vLo)}–${fmt(topA.vHi)} km/h</b>, il est le plus <i>fréquent</i> (${fmt(100 * topA.share)} % des lignes bruyantes) : ${esc(topA.o.label)}.` + (same ? " <b>C’est le même organe vu à deux fréquences</b> (fondamental et harmonique) : il n’y a pas deux sources, mais deux moments où il passe dans 1500–1700 Hz." : " Ce sont deux organes différents."));
+          }
+        }
+      }
+    } catch (e) { /* explication facultative */ }
     if (w && sp && sp.peak && sp.diff) lines.push(`À <b>${fmt(sp.vc)} km/h</b> (vitesse où le bruit gênant est le plus fréquent), la charge ajoute <b>+${fmt(sp.peak.d, 1)} dB à ${fmt(sp.peak.f)} Hz</b> (spectre traction − érre, ${sp.nT} lignes traction / ${sp.nE} érre).`);
-    if (w && sp && sp.peakAll) lines.push(`Excès plus fort <i>hors bande</i> : +${fmt(sp.peakAll.d, 1)} dB à ${fmt(sp.peakAll.f)} Hz (à identifier : voir les raies ci-dessous).`);
+    if (w && sp && sp.peakAll) lines.push(`Excès plus fort <i>hors bande</i> : +${fmt(sp.peakAll.d, 1)} dB à ${fmt(sp.peakAll.f)} Hz (à identifier : voir les fréquences ci-dessous).`);
     if (w && sp && !sp.diff) lines.push("Pas assez de lignes en érre à cette vitesse pour isoler ce que la charge ajoute : marquer l’érre pendant l’acquisition.");
     const at = res.attr && res.attr.Traction;
     if (at && at.n >= 20) {
@@ -222,8 +287,9 @@
     }
     let conf = "—";
     if (top) {
-      conf = top.score >= 75 ? "élevée" : top.score >= 55 ? "moyenne" : "faible";
-      lines.push(`Suspect n°1 : <b>${esc(top.name)}</b> — indice de présomption ${top.score}/100 (confiance <b>${conf}</b>).`);
+      conf = rel ? rel.level : (top.score >= 75 ? "élevée" : top.score >= 55 ? "moyenne" : "faible");
+      lines.push(`Suspect n°1 : <b>${esc(top.name)}</b> — indice de présomption ${top.score}/100 (confiance <b>${conf}</b>${rel && rel.limitedBy === "données" ? ", limitée par les données" : ""}).`);
+      if (rel && !rel.desig.ok) lines.push(`<b>Attention :</b> ${esc(rel.desig.txt)}`);
       if (top.d.bandCross) lines.push(`Il traverse la bande gênante entre <b>${fmt(top.d.bandCross[0])} et ${fmt(top.d.bandCross[1])} km/h</b>.`);
       lines.push(`À faire : ${esc(actionFor(top))}`);
     }
@@ -278,9 +344,9 @@
     // repères théoriques à la vitesse du pire cas
     try {
       const marks = [];
-      markAxles().forEach((a, k) => { const t = transmissionFrequencies(sp.vc, a.d); if (t) { marks.push({ f: t.meshReducer, t: `réd. ${a.id} Ø${fmt(a.d)} (${a.src})`, k }); marks.push({ f: t.meshBridge, t: `pont ${a.id}`, k, dash: true }); } });
+      markAxles().forEach((a, k) => { const vm = sp.vm || sp.vc, t = transmissionFrequencies(vm, a.d), tl = transmissionFrequencies(sp.vlo || vm - sp.half, a.d), th = transmissionFrequencies(sp.vhi || vm + sp.half, a.d); if (t) { marks.push({ f: t.meshReducer, lo: tl.meshReducer, hi: th.meshReducer, t: `réd. ${a.id} Ø${fmt(a.d)} (${a.src})`, k }); marks.push({ f: t.meshBridge, lo: tl.meshBridge, hi: th.meshBridge, t: `pont ${a.id}`, k, dash: true }); } });
       marks.filter((m) => m.f >= F0 && m.f <= F1).forEach((m, j) => {
-        g.fillStyle = acc2; g.globalAlpha = 0.12; { const w = (sp.half / sp.vc) * m.f; g.fillRect(x(m.f - w), top.y0 + 6, x(m.f + w) - x(m.f - w), top.y1 - top.y0 - 6); } g.globalAlpha = 1;
+        g.fillStyle = acc2; g.globalAlpha = 0.12; g.fillRect(x(m.lo), top.y0 + 6, x(m.hi) - x(m.lo), top.y1 - top.y0 - 6); g.globalAlpha = 1;
         g.strokeStyle = acc2; g.setLineDash(m.dash ? [2, 4] : [6, 3]); g.beginPath(); g.moveTo(x(m.f), top.y0 - 8 + (j % 3) * 12); g.lineTo(x(m.f), top.y1); g.stroke(); g.setLineDash([]);
         g.fillStyle = acc2; g.textAlign = "center"; g.fillText(m.t, Math.min(R - 60, Math.max(L + 50, x(m.f))), top.y0 - 12 + (j % 3) * 12);
       });
@@ -295,7 +361,16 @@
       g.globalAlpha = 1; g.fillStyle = txt; g.textAlign = "left"; g.fillText("traction − érre (dB)", L + 4, bot.y0 - 4);
       if (sp.peak) { g.fillStyle = acc2; g.textAlign = "center"; g.fillText(`+${fmt(sp.peak.d, 1)} dB @ ${fmt(sp.peak.f)} Hz`, Math.min(R - 60, Math.max(L + 60, x(sp.peak.f))), yd(sp.peak.d) - 5); }
     } else { g.fillStyle = mut; g.textAlign = "left"; g.fillText("Pas de spectre érre à cette vitesse : différence impossible.", L + 4, bot.y0 + 20); }
-    { let bi = -1, bv = -Infinity; const A = TR || ER; for (let i = iOf(BAND[0]); i <= iOf(BAND[1]); i++) if (Number.isFinite(A[i]) && A[i] > bv) { bv = A[i]; bi = i; } if (bi >= 0) { g.fillStyle = acc; g.beginPath(); g.arc(x(bi * STEP), y(bv), 4, 0, 6.3); g.fill(); g.textAlign = "center"; g.fillText(`plus fort dans la bande : ${fmt(bi * STEP)} Hz`, Math.min(R - 90, Math.max(L + 90, x(bi * STEP))), y(bv) + 16); } }
+    { let bi = -1, bv = -Infinity; const A = TR || ER; for (let i = iOf(BAND[0]); i <= iOf(BAND[1]); i++) if (Number.isFinite(A[i]) && A[i] > bv) { bv = A[i]; bi = i; } if (bi >= 0) {
+      const edge = bi === iOf(BAND[1]) || bi === iOf(BAND[0]);
+      let gi = bi, gv = bv; if (edge) for (let i = iOf(BAND[0] - 100); i <= iOf(BAND[1] + 150); i++) if (Number.isFinite(A[i]) && A[i] > gv) { gv = A[i]; gi = i; }
+      g.fillStyle = acc; g.beginPath(); g.arc(x(bi * STEP), y(bv), 4, 0, 6.3); g.fill(); g.textAlign = "center";
+      if (edge && gi !== bi) {
+        g.strokeStyle = acc; g.lineWidth = 2; g.beginPath(); g.arc(x(gi * STEP), y(gv), 5, 0, 6.3); g.stroke(); g.lineWidth = 1;
+        g.fillText(`pic réel : ${fmt(gi * STEP)} Hz`, Math.min(R - 60, Math.max(L + 60, x(gi * STEP) + 38)), y(gv) - 8);
+        g.fillText(`plus fort dans la bande : ${fmt(bi * STEP)} Hz (bord de la bande)`, Math.min(R - 130, Math.max(L + 130, x(bi * STEP))), y(bv) + 16);
+      } else g.fillText(`plus fort dans la bande : ${fmt(bi * STEP)} Hz`, Math.min(R - 90, Math.max(L + 90, x(bi * STEP))), y(bv) + 16);
+    } }
     // légende
     g.textAlign = "left"; let lx = L + 6; [[acc, `Traction (${sp.nT} lignes)`], [ok, `Érre (${sp.nE} lignes)`]].forEach(([c, t]) => { g.fillStyle = c; g.fillRect(lx, top.y1 - 14, 14, 3); g.fillStyle = txt; g.fillText(t, lx + 18, top.y1 - 9); lx += 150; });
   }
@@ -348,12 +423,19 @@
     const live = typeof acqRunning !== "undefined" && acqRunning;
     if (live) { el.innerHTML = "<h4>Enquête</h4><p><i>Verdict et graphiques calculés à l’arrêt de l’acquisition.</i></p>"; last = null; return null; }
     const dom = window.DominanteTGV && window.DominanteTGV.last;
-    const res = compute(rows), sus = suspects(dom), ver = verdict(res, sus);
-    last = { res, sus, ver };
+    const res = compute(rows), sus = suspects(dom), rel = reliability(res, sus), ver = verdict(res, sus, rel);
+    last = { res, sus, ver, rel };
     try { const sg = JSON.stringify(((res.attr && res.attr.Traction && res.attr.Traction.items) || []).slice(0, 3).map((it) => [it.o.short, Math.round(100 * it.share)])); if (sg !== lastSig) { lastSig = sg; setTimeout(() => { try { window.DiagnosticTGV && window.DiagnosticTGV.refresh && window.DiagnosticTGV.refresh(); } catch (e) { /* ignore */ } }, 0); } } catch (e) { /* ignore */ }
     const W = Math.max(300, Math.min(1000, (el.clientWidth || 700) - 20));
     let html = '<h4>Enquête : quel bruit, à quelle vitesse, pourquoi ?</h4>';
     html += `<div class="enq-verdict"><div class="enq-head">${ver.head}</div><ul>${ver.lines.map((l) => `<li>${l}</li>`).join("")}</ul></div>`;
+    {
+      const col = ["#CD0037", "#FFB612", "#82BE00"], ico = ["✖", "▲", "✔"], lab = ["insuffisant", "limite", "solide"];
+      html += `<div class="enq-rel"><div class="enq-rel-head"><span class="enq-badge" style="background:${col[rel.lv]}">Confiance ${esc(rel.level)}</span> <span class="small">${rel.crit.filter((c) => c.pts === 2).length} critère(s) solide(s) sur ${rel.crit.length}</span></div>`;
+      html += '<table border="1" cellspacing="0" cellpadding="4" class="enq-attr"><tr><th>Critère</th><th>Constat</th><th>État</th></tr>' + rel.crit.map((c) => `<tr><td>${esc(c.name)}</td><td>${esc(c.detail)}</td><td style="white-space:nowrap"><b style="color:${c.pts === 1 ? "#8a6100" : col[c.pts]}">${ico[c.pts]}</b> ${lab[c.pts]}</td></tr>`).join("") + "</table>";
+      if (rel.need.length) html += `<p class="small"><b>Pour fiabiliser le verdict :</b></p><ul class="small">${rel.need.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+      html += `<p class="small"><b>Désignation de l’essieu :</b> ${esc(rel.desig.txt)}</p></div>`;
+    }
     if (sus.length) {
       html += '<div class="enq-sus">' + sus.map((s, i) => `<div class="enq-row"><div class="enq-name">${i === 0 ? "★ " : ""}${esc(s.name)}</div><div class="enq-bar"><i style="width:${s.score}%"></i><b>${s.score}</b></div><div class="enq-why">${s.why.join(" · ")}</div></div>`).join("") + "</div>";
       html += '<p class="small"><i>L’indice de présomption (0–100) classe les pistes ; ce n’est pas une probabilité. Il additionne : part des lignes bruyantes expliquée en traction (30), passage dans 1500–1700 Hz (30), dépendance à la charge (15), diamètre cohérent avec un essieu (15), poids énergétique (10).</i></p>';
@@ -361,12 +443,12 @@
     const at0 = res.attr && res.attr.Traction;
     if (at0 && at0.n >= 20) {
       const rowsA = at0.items.map((it) => { const e = res.attr.Erre, x = e && e.items.find((y) => y.o === undefined ? false : y.o.kind === it.o.kind && y.o.mult === it.o.mult && y.o.axle.id === it.o.axle.id); return `<tr><td>${esc(it.o.label)}</td><td>${fmt(100 * it.share)} %</td><td>${fmt(it.vLo)}–${fmt(it.vHi)} km/h</td><td>+${fmt(it.em, 1)} dB</td><td>${e && e.n >= 20 ? fmt(100 * (x ? x.share : 0)) + " %" : "n/d"}</td></tr>`; }).join("");
-      html += `<h5>D’où vient le bruit de 1500–1700 Hz ? (lignes ≥ +${EM_LOUD} dB, traction : ${at0.n})</h5><table border="1" cellspacing="0" cellpadding="4" class="enq-attr"><tr><th>Organe dont la fréquence coïncide</th><th>Part (traction)</th><th>Vitesses</th><th>Émergence</th><th>Part en érre</th></tr>${rowsA}<tr><td><i>Non attribuées : raie fixe, résonance, autre organe</i></td><td>${fmt(100 * at0.unShare)} %</td><td>${at0.unV ? fmt(at0.unV[0]) + "–" + fmt(at0.unV[1]) + " km/h" : "—"}</td><td></td><td></td></tr></table><p class="small"><i>Une ligne est attribuée à un organe si la fréquence de son pic est à ±1,2 % de f = k × vitesse. Une part forte en traction et faible en érre désigne la source qui dépend de la charge.</i></p>`;
+      html += `<h5>D’où vient le bruit de 1500–1700 Hz ? (lignes ≥ +${EM_LOUD} dB, traction : ${at0.n})</h5><table border="1" cellspacing="0" cellpadding="4" class="enq-attr"><tr><th>Organe dont la fréquence coïncide</th><th>Part (traction)</th><th>Vitesses</th><th>Émergence</th><th>Part en érre</th></tr>${rowsA}<tr><td><i>Non attribuées : fréquence fixe, résonance, autre organe</i></td><td>${fmt(100 * at0.unShare)} %</td><td>${at0.unV ? fmt(at0.unV[0]) + "–" + fmt(at0.unV[1]) + " km/h" : "—"}</td><td></td><td></td></tr></table><p class="small"><i>Une ligne est attribuée à un organe si la fréquence de son pic est à ±1,2 % de f = k × vitesse. Une part forte en traction et faible en érre désigne la source qui dépend de la charge.</i></p>`;
     }
     if (res.n >= 30) {
-      html += '<h5>Carte de gêne : où et quand ça émerge</h5><canvas id="enqHeat"></canvas><h5>Ce que la charge ajoute (spectre à la vitesse où le bruit gênant est le plus fréquent)</h5><canvas id="enqFft"></canvas><p class="small"><i>Les bandes violettes montrent où tombe chaque engrènement sur la plage de vitesse moyennée : une raie qui suit la vitesse s’étale sur toute la bande, donc ne forme pas un pic fin ici.</i></p><h5>Spectre par ordre : le réducteur doit tomber sur son repère</h5><canvas id="enqOrd"></canvas><p class="small"><i>Axe = fréquence ÷ vitesse (Hz par km/h). Toutes les vitesses sont superposées : une raie d’engrènement forme un pic fin, au repère de son essieu (5,81 × 900 ÷ Ø). Un pic décalé donne le diamètre réel ; une raie à fréquence fixe, elle, s’étale.</i></p>';
+      html += '<h5>Carte de gêne : où et quand ça émerge</h5><canvas id="enqHeat"></canvas><h5>Ce que la charge ajoute (spectre à la vitesse où le bruit gênant est le plus fréquent)</h5><canvas id="enqFft"></canvas><p class="small"><i>Les repères violets sont calculés à la <b>vitesse moyenne réelle des lignes</b> de la fenêtre, et la zone ombrée couvre leur étendue de vitesse (90 % des lignes). Les bandes violettes montrent où tombe chaque engrènement sur la plage de vitesse moyennée : une fréquence qui suit la vitesse s’étale sur toute la bande, donc ne forme pas un pic fin ici.</i></p><h5>Spectre par ordre : le réducteur doit tomber sur son repère</h5><canvas id="enqOrd"></canvas><p class="small"><i>Axe = fréquence ÷ vitesse (Hz par km/h). Toutes les vitesses sont superposées : une fréquence d’engrènement forme un pic fin, au repère de son essieu (5,81 × 900 ÷ Ø). Un pic décalé donne le diamètre réel ; une composante à fréquence fixe, elle, s’étale.</i></p>';
     }
-    html += '<style>.enq-verdict{border-left:5px solid var(--accent,#CD0037);padding:6px 12px;margin:6px 0 10px;background:rgba(110,30,120,.07);border-radius:6px}.enq-head{font-size:15px;margin-bottom:4px}.enq-verdict ul{margin:4px 0 2px 18px;padding:0}.enq-row{display:grid;grid-template-columns:minmax(0,1.3fr) 140px;gap:4px 10px;margin:6px 0;align-items:center}.enq-bar{position:relative;height:16px;border:1px solid var(--border,#D7D7D7);border-radius:8px;overflow:hidden}.enq-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent2,#6E1E78),var(--accent,#CD0037))}.enq-bar b{position:absolute;right:10px;top:-1px;font-size:12px;color:var(--text,#3C3732)}.enq-why{grid-column:1/3;font-size:12px;color:var(--muted,#747678)}.enq-name{font-weight:600}.enq-attr{border-collapse:collapse;font-size:13px;width:100%}.enq-attr th{background:rgba(110,30,120,.12);text-align:left}</style>';
+    html += '<style>.enq-rel{margin:8px 0 12px;padding:8px 12px;border:1px solid var(--border,#D7D7D7);border-radius:8px;background:#fff}.enq-rel-head{margin-bottom:6px}.enq-badge{display:inline-block;padding:3px 12px;border-radius:999px;color:#fff;font-weight:700;font-size:14px}.enq-rel ul{margin:2px 0 6px 18px;padding:0}.enq-verdict{border-left:5px solid var(--accent,#CD0037);padding:6px 12px;margin:6px 0 10px;background:rgba(110,30,120,.07);border-radius:6px}.enq-head{font-size:15px;margin-bottom:4px}.enq-verdict ul{margin:4px 0 2px 18px;padding:0}.enq-row{display:grid;grid-template-columns:minmax(0,1.3fr) 140px;gap:4px 10px;margin:6px 0;align-items:center}.enq-bar{position:relative;height:16px;border:1px solid var(--border,#D7D7D7);border-radius:8px;overflow:hidden}.enq-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent2,#6E1E78),var(--accent,#CD0037))}.enq-bar b{position:absolute;right:10px;top:-1px;font-size:12px;color:var(--text,#3C3732)}.enq-why{grid-column:1/3;font-size:12px;color:var(--muted,#747678)}.enq-name{font-weight:600}.enq-attr{border-collapse:collapse;font-size:13px;width:100%}.enq-attr th{background:rgba(110,30,120,.12);text-align:left}</style>';
     el.innerHTML = html;
     if (res.n >= 30) {
       canv = { heat: el.querySelector("#enqHeat"), fft: el.querySelector("#enqFft"), ord: el.querySelector("#enqOrd") };
@@ -380,9 +462,10 @@
     const imgs = [];
     try { if (canv.heat) imgs.push(["Carte de gêne", canv.heat.toDataURL("image/png")]); if (canv.fft) imgs.push(["Spectre traction / érre", canv.fft.toDataURL("image/png")]); if (canv.ord) imgs.push(["Spectre par ordre (Hz par km/h)", canv.ord.toDataURL("image/png")]); } catch (e) { /* images facultatives */ }
     const at = last.res.attr && last.res.attr.Traction; const attr = at && at.n >= 20 ? at.items.map((it) => [it.o.label, fmt(100 * it.share) + " %", fmt(it.vLo) + "–" + fmt(it.vHi) + " km/h"]).concat([["Non attribuées", fmt(100 * at.unShare) + " %", at.unV ? fmt(at.unV[0]) + "–" + fmt(at.unV[1]) + " km/h" : "—"]]) : [];
-    return { attr, head: strip(last.ver.head), lines: last.ver.lines.map(strip), suspects: last.sus.map((s) => [s.name, s.score, s.why.map(strip).join(" ; ")]), imgs };
+    const rel = last.rel ? { level: last.rel.level, crit: last.rel.crit.map((c) => [c.name, c.detail, ["insuffisant", "limite", "solide"][c.pts]]), need: last.rel.need, desig: last.rel.desig.txt } : null;
+    return { rel, attr, head: strip(last.ver.head), lines: last.ver.lines.map(strip), suspects: last.sus.map((s) => [s.name, s.score, s.why.map(strip).join(" ; ")]), imgs };
   }
-  const api = { render, compute, suspects, rowEm, reportParts, shareForDiameter, get last() { return last; } };
+  const api = { render, compute, suspects, reliability, rowEm, reportParts, shareForDiameter, get last() { return last; } };
   window.EnqueteTGV = api;
   if (typeof module !== "undefined") module.exports = api;
   window.addEventListener("resize", () => { try { const el = document.getElementById("enquetePanel"); if (last && el && el.offsetParent) { const r = last.res; const W = Math.max(300, Math.min(1000, (el.clientWidth || 700) - 20)); if (canv.heat && canv.fft) { drawHeat(canv.heat, r, W); drawFft(canv.fft, r, W); if (canv.ord) drawOrder(canv.ord, r, W); } } } catch (e) { /* ignore */ } });

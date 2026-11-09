@@ -61,7 +61,7 @@
     },
     equivalentDiameter: (hz, speedKmh, reducer) => nul(w.tgv_equivalent_diameter(hz, speedKmh, reducer ? 1 : 0)),
 
-    /* Suivi de la raie : même résultat que trackTone() : { frames:[{t,peakHz,peakDb,tnr,prom,bandDb,spec}], N, binHz, sr } */
+    /* Suivi de la fréquence : même résultat que trackTone() : { frames:[{t,peakHz,peakDb,tnr,prom,bandDb,spec}], N, binHz, sr } */
     trackTone(record, fLo, fHi, calFactor = 1) {
       const x = put(record.samples), sr = record.sampleRate;
       const h = w.tgv_track_tone(x[0], record.samples.length, sr, record.duration, fLo, fHi, calFactor);

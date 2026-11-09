@@ -1,0 +1,67 @@
+/* Interface v0.9.11 — finition visuelle, charte SNCF conservée */
+html.ux{--ux-radius:14px;--ux-shadow:0 1px 2px rgba(60,55,50,.06),0 6px 18px rgba(60,55,50,.07)}
+html.ux body{font-family:"Avenir Next","Avenir","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased;color:var(--ux-ink)}
+html.ux *{min-width:0}
+html.ux img,html.ux canvas,html.ux svg,html.ux video{max-width:100%}
+html.ux main{max-width:1280px;margin-left:auto;margin-right:auto}
+
+/* en-tête */
+html.ux header{border-bottom:3px solid var(--ux-violet)!important;box-shadow:0 4px 14px rgba(60,55,50,.08)!important}
+html.ux .brand h1{font-weight:800;letter-spacing:-.015em;color:var(--ux-violet)}
+html.ux .top-badge{background:var(--ux-violet)!important;color:#fff!important;border:0!important;border-radius:999px!important;font-weight:600;letter-spacing:.01em}
+
+/* onglets : segments propres */
+html.ux .mode-tabs{display:flex;flex-wrap:nowrap;gap:6px!important;padding:5px!important;background:#fff;border:1px solid var(--ux-line);border-radius:14px;box-shadow:var(--ux-shadow)}
+html.ux .mode-tabs button{flex:1 1 0;min-height:44px;font-size:15px;border:0!important;background:transparent!important;border-radius:10px!important;transition:background .15s,color .15s,box-shadow .15s;white-space:nowrap}
+html.ux .mode-tabs button:not(.active):hover{background:#F2EAF4!important}
+html.ux .mode-tabs button.active,html.ux .mode-tabs button.active:hover{box-shadow:0 3px 10px rgba(110,30,120,.35)}
+
+/* cartes */
+html.ux .card,html.ux .panel,html.ux .transmission-card{border:1px solid var(--ux-line)!important;border-radius:var(--ux-radius)!important;box-shadow:var(--ux-shadow)!important;background:#fff}
+html.ux h2,html.ux h3{color:var(--ux-ink);font-weight:700;letter-spacing:-.01em}
+html.ux .card h2,html.ux .panel h2{display:flex;align-items:center;gap:10px}
+html.ux .card h2::before,html.ux .panel h2::before{content:"";width:4px;height:1.1em;border-radius:2px;background:var(--ux-violet);flex:none}
+
+/* champs et boutons */
+html.ux input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),html.ux select{min-height:42px;border:1px solid var(--ux-line);border-radius:10px;padding:6px 10px;background:#fff;color:var(--ux-ink);font:inherit;max-width:100%}
+html.ux input:focus,html.ux select:focus{outline:2px solid var(--ux-yellow);outline-offset:1px;border-color:var(--ux-violet)}
+html.ux button{border-radius:10px;font-weight:600;transition:background .15s,transform .05s,box-shadow .15s}
+html.ux button:active{transform:translateY(1px)}
+html.ux input[type=range]{accent-color:var(--ux-violet);width:100%}
+html.ux input[type=checkbox],html.ux input[type=radio]{accent-color:var(--ux-violet)}
+html.ux details>summary{cursor:pointer;font-weight:600;padding:8px 0}
+
+/* zone de dépôt */
+html.ux .drop,html.ux .dropzone,html.ux #dropZone,html.ux label[for=fileInput]{max-width:100%;box-sizing:border-box;border:2px dashed var(--ux-gray7);border-radius:var(--ux-radius);background:#FAFAFA}
+
+/* graphiques */
+html.ux canvas{border-radius:10px}
+
+/* Lecteur */
+html.ux #lecteurCard{display:grid;gap:14px}
+html.ux #lecteurCard label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--ux-muted)}
+html.ux #lecteurCard .row,html.ux #lecteurCard .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+html.ux #lecteurCard input,html.ux #lecteurCard select,html.ux #lecteurCard button{min-height:42px;box-sizing:border-box}
+html.ux #lecPlay{background:var(--ux-violet);color:#fff;border:0;padding:0 22px}
+html.ux #lecPlay:hover{background:var(--ux-prune)}
+html.ux #lecStop{background:#fff;border:1px solid var(--ux-violet);color:var(--ux-violet);padding:0 18px}
+html.ux #lecRecord{background:var(--ux-carmin);color:#fff;border:0}
+html.ux #lecTime,html.ux #lecNow{font-variant-numeric:tabular-nums;font-weight:700;color:var(--ux-violet)}
+html.ux #lecStatus{padding:10px 12px;border-radius:10px;background:#F6F6F6;border-left:4px solid var(--ux-blue);font-size:13px}
+
+/* téléphone */
+@media(max-width:700px){
+  html.ux .header-inner{grid-template-columns:52px minmax(0,1fr) auto!important;gap:8px 10px!important;padding:8px 12px!important}
+  html.ux .brand img{width:52px!important;max-width:52px!important;max-height:44px!important}
+  html.ux .brand h1{font-size:17px!important;line-height:1.1!important}
+  html.ux .top-badge{grid-column:3!important;grid-row:1!important;justify-self:end!important;font-size:10px!important;padding:4px 8px!important;max-width:96px;line-height:1.15;text-align:center}
+  html.ux .ux-head-right{grid-column:1/-1;grid-row:2;margin:0!important;justify-content:flex-start}
+  html.ux .ux-head-right .top-badge{display:none}
+  html.ux .mode-tabs{display:flex!important;margin:0 0 8px!important;border-radius:0 0 14px 14px;padding:4px!important;gap:3px!important}
+  html.ux .mode-tabs button{padding:8px 2px!important;font-size:12px!important;min-height:42px}
+  html.ux #lecteurCard .row>*,html.ux #lecteurCard .controls>*{flex:1 1 140px}
+  html.ux main{padding:8px!important}
+}
+html.ux #lecteurCard{gap:10px}
+html.ux #lecteurCard p,html.ux #lecteurCard .hint{margin:0}
+html.ux #lecteurCard label{margin:0}

@@ -14,7 +14,7 @@
  *   Les points trop proches (moins de 20 m) sont regroupés pour alléger la carte.
  *
  * SOURCES DES DONNÉES (dans cet ordre)
- *   1. CSV / JSON associé dans « Analyse de la raie gênante » ou ZIP de session déposé ;
+ *   1. CSV / JSON associé dans « Analyse de la fréquence gênante » ou ZIP de session déposé ;
  *   2. à défaut, l'acquisition en cours ou terminée sur cet appareil (acqSamples).
  *
  * FOND DE CARTE

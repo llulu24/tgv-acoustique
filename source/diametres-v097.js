@@ -21,7 +21,13 @@
  *   Validation (essai du 30/10/2026, deux motrices) : diamètres retrouvés à ± 2 mm des
  *   valeurs mesurées en atelier (857 → 857,2 ; 924 → 922,4 ; 896 → 897,3 ; 906 → ≈ 904).
  *   Limite : deux essieux dont les diamètres diffèrent de moins de 1,5 % environ donnent
- *   un seul pic élargi (« diamètres proches »).
+ *   un seul pic élargi (« diamètres proches »). Le son ne permet alors pas de dire quel
+ *   essieu est en cause (ex. rame 232 : essieux 898 et 900 mm).
+ *   v0.9.9 build 05/11 : un second pic n'est retenu que s'il est net (≥ 6 dB au-dessus du
+ *   fond et ≥ 1/3 du pic principal) ET s'il se retrouve à la même valeur de diamètre à
+ *   basse et à haute vitesse (une fréquence proportionnelle à la vitesse). Une fréquence fixe ou un
+ *   bruit voisin, qui ne suit pas la vitesse, donne sinon un faux « diamètre » quand la vitesse
+ *   est presque constante (cas de la rame 232 : faux pic à 875 mm, +3 dB, contre 898 mm, +23 dB).
  *   Durée nécessaire (mesurée sur les essais du 30/10, 95 % des cas) : 30 s → ± 8 mm,
  *   1 min → ± 3 à 6 mm, 2 min → ± 1,5 à 3 mm, 5 min → ± 1 mm ; plus ± 1 à 2 mm dus au GPS.
  *   D'où : minimum 60 s, résultat « fiable » à partir de 120 s.
@@ -128,15 +134,25 @@
     return D[i] + (Math.abs(den) > 1e-9 ? Math.max(-1, Math.min(1, (0.5 * (l - r)) / den)) : 0) * (D[1] - D[0]);
   }
 
-  // maxima locaux nettement au-dessus du fond de la courbe (au plus deux essieux, écart ≥ 12 mm)
+  // maxima locaux nettement au-dessus du fond de la courbe (au plus deux essieux). Deux pics distants
+  // de moins de 1,5 % (≈ 13 mm) sont la même fréquence. Le second pic doit être net : ≥ 4 dB au-dessus
+  // du fond ET ≥ 1/3 du pic principal (v1.4 : seuil abaissé de 6 à 4 dB, le fichier du 30/10 à 07h46 a un second pic réel à +5,4 dB, 924 mm mesuré en atelier), sinon il est écarté (liste « rejected » pour l'afficher).
+  const MIN_SEP = 14, SECOND_MIN_DB = 4, SECOND_MIN_RATIO = 1 / 3;
   function curvePeaks(Ds, E) {
     const fin = E.filter(Number.isFinite).sort((a, b) => a - b), base = fin[Math.floor(fin.length / 2)];
     const cands = [];
     for (let j = 1; j < E.length - 1; j++) if (E[j] >= E[j - 1] && E[j] >= E[j + 1] && E[j] - base >= 3) cands.push(j);
     cands.sort((a, b) => E[b] - E[a]);
-    const peaks = [];
-    for (const j of cands) if (peaks.every((p) => Math.abs(Ds[p] - Ds[j]) >= 12) && peaks.length < 2) peaks.push(j);
-    return { base, peaks };
+    const peaks = [], rejected = [];
+    for (const j of cands) {
+      if (peaks.some((p) => Math.abs(Ds[p] - Ds[j]) < MIN_SEP)) continue;       // même fréquence
+      if (!peaks.length) { peaks.push(j); continue; }
+      const prom = E[j] - base, main = E[peaks[0]] - base;
+      if (peaks.length >= 2) continue;
+      if (prom < SECOND_MIN_DB || prom < SECOND_MIN_RATIO * main) { rejected.push({ d: Ds[j], prom, main, why: `trop faible (+${prom.toFixed(1)} dB contre +${main.toFixed(1)} dB pour le pic principal)` }); continue; }
+      peaks.push(j);
+    }
+    return { base, peaks, rejected };
   }
   // précision réaliste selon la durée de signal exploitable (essais du 30/10/2026)
   function precisionFor(n, stat = 0) {
@@ -161,7 +177,7 @@
       setInfo(`Recherche du diamètre sur ${spec.frames.length} s de signal…`); await pause();
       const Ds = []; for (let d = D_MIN; d <= D_MAX; d += 1) Ds.push(d);
       const M = matrix(spec, Ds, TOL), all = M.map((_, i) => i), E = meanCols(M, all);
-      const { base, peaks } = curvePeaks(Ds, E);
+      const { base, peaks, rejected } = curvePeaks(Ds, E);
       await pause();
       // affinage au demi-millimètre + incertitude (bootstrap sur les instants)
       const found = [];
@@ -174,9 +190,24 @@
         found.push({ d: d0, prom: E[j] - base, em: E[j], stat: 2 * sd });
         await pause();
       }
+      // un vrai diamètre se retrouve à la même valeur à basse et à haute vitesse
+      const vs = spec.frames.map((f) => f.v), vmax = Math.max(...vs);
+      const lowRows = all.filter((i) => vs[i] <= 0.85 * vmax), highRows = all.filter((i) => vs[i] >= 0.92 * vmax);
+      const canCheck = lowRows.length >= 20 && highRows.length >= 20;
+      const localMax = (Ecur, d0) => { let bj = -1; Ds.forEach((d, j) => { if (Math.abs(d - d0) <= 15 && Number.isFinite(Ecur[j]) && (bj < 0 || Ecur[j] > Ecur[bj])) bj = j; }); return bj; };
+      const kept = [];
+      found.forEach((p) => {
+        if (!canCheck) { p.check = "à confirmer : vitesse quasi constante"; kept.push(p); return; }
+        const ok = [lowRows, highRows].every((rows) => {
+          const Er = meanCols(M, rows), fin = Er.filter(Number.isFinite).sort((x, y) => x - y), b0 = fin[fin.length >> 1], j = localMax(Er, p.d);
+          return j >= 0 && Er[j] - b0 >= 4 && Math.abs(Ds[j] - p.d) <= 6;
+        });
+        if (ok) { p.check = "validé à basse et haute vitesse"; kept.push(p); }
+        else rejected.push({ d: p.d, prom: p.prom, why: "non retrouvé à basse vitesse : probablement une fréquence fixe ou un bruit voisin, pas un diamètre de roue" });
+      });
+      found.length = 0; kept.forEach((p) => found.push(p));
       found.sort((a, b) => a.d - b.d);
-      const vs = spec.frames.map((f) => f.v);
-      state.result = { source: "fichier", record: record.name, Ds, E, base, found, n: spec.frames.length, vMin: Math.min(...vs), vMax: Math.max(...vs), traction: spec.hasTraction };
+      state.result = { source: "fichier", record: record.name, Ds, E, base, found, rejected, n: spec.frames.length, vMin: Math.min(...vs), vMax: Math.max(...vs), traction: spec.hasTraction };
       render();
       if (found.length) apply(true);
       setInfo(found.length ? `Calcul terminé : ${found.length} diamètre(s) trouvé(s) sur ${spec.frames.length} s de signal, reportés dans les réglages E1 / E2. ${SI_ESSIEUX}` : "Calcul terminé : aucun pic net. Vérifiez la vitesse associée et la chaîne de transmission.");
@@ -214,14 +245,15 @@
   }
   function rowsForTable() {
     const r = state.result; if (!r) return [];
-    return r.found.map((p, i) => [r.found.length === 2 ? (i ? "Essieu 2 (plus grand)" : "Essieu 1 (plus petit)") : "Essieu(x)", `${fmt(p.d, 1)} mm`, `± ${fmt(precisionFor(r.n, p.stat), 1)} mm`, `${fmt(p.prom, 1)} dB`, p.prom < 4 ? "faible (pic peu net)" : reliability(r.n)]);
+    return r.found.map((p, i) => [r.found.length === 2 ? (i ? "Essieu 2 (plus grand)" : "Essieu 1 (plus petit)") : "Essieu(x)", `${fmt(p.d, 1)} mm`, `± ${fmt(precisionFor(r.n, p.stat), 1)} mm`, `${fmt(p.prom, 1)} dB`, p.prom < 4 ? "faible (pic peu net)" : (p.check && !/^validé/.test(p.check) ? p.check : reliability(r.n))]);
   }
   const SI_ESSIEUX = "À vérifier dans la base SI-Essieux : les diamètres calculés doivent correspondre aux deux essieux de tête (essieux moteurs de la motrice mesurée).";
   function verdict() {
     const r = state.result; if (!r) return "";
     if (!r.found.length) return "Aucun pic net : pas assez de traction stable, vitesse mal associée ou chaîne de transmission différente.";
-    if (r.found.length === 1) return "Un seul pic : les deux essieux ont des diamètres proches (moins de 1,5 % d’écart environ) ou un seul essieu est audible. La valeur s’applique aux deux essieux à ± quelques millimètres. " + SI_ESSIEUX;
-    return `Deux essieux distincts, écart ${fmt(r.found[1].d - r.found[0].d, 1)} mm. L’ordre E1 / E2 (position dans la motrice) ne peut pas être déduit du son. ` + SI_ESSIEUX;
+    const rej = (r.rejected || []).length ? ` Pic secondaire écarté à ${(r.rejected || []).map((x) => fmt(x.d, 0) + " mm (" + x.why + ")").join(" ; ")}.` : "";
+    if (r.found.length === 1) return "Un seul pic : les deux essieux ont des diamètres proches (moins de 1,5 % d’écart environ) ou un seul essieu est audible. La valeur s’applique aux deux essieux à ± quelques millimètres. Le son ne permet pas de dire lequel des deux est en cause : désigner l’essieu demande une mesure près de chaque réducteur." + rej + " " + SI_ESSIEUX;
+    return `Deux essieux distincts, écart ${fmt(r.found[1].d - r.found[0].d, 1)} mm. L’ordre E1 / E2 (position dans la motrice) ne peut pas être déduit du son. ` + SI_ESSIEUX + ((r.rejected || []).length ? ` Pic écarté : ${(r.rejected || []).map((x) => fmt(x.d, 0) + " mm (" + x.why + ")").join(" ; ")}.` : "");
   }
   function render() {
     const box = $id("diamResult"); if (!box) return;
@@ -243,9 +275,12 @@
   function apply(auto = false) {
     const r = state.result; if (!r?.found.length || r.n < MIN_SECONDS) return;
     const cl = (d) => Math.max(D_RETRAIT, Math.min(D_NEUF, Math.round(d)));   // réglage borné 850–924
-    const d1 = cl(r.found[0].d), d2 = cl((r.found[1] || r.found[0]).d);
+    let d1 = cl(r.found[0].d), d2 = cl((r.found[1] || r.found[0]).d), kept = false;
+    // un seul pic et des cotes saisies à la main compatibles (ex. 898 / 900) : on les garde, le son les confirme
+    const man = ["transWheelDiameter1", "transWheelDiameter2"].map((id) => { const el = $id(id); return el && !el.dataset.calcule ? parseFloat(el.value) : NaN; });
+    if (r.found.length === 1 && man.every(Number.isFinite) && man.every((m) => Math.abs(m - r.found[0].d) <= Math.max(4, precisionFor(r.n, r.found[0].stat)))) { d1 = Math.round(man[0]); d2 = Math.round(man[1]); kept = true; }
     const prev = state.applied;
-    state.applied = { d1, d2, source: r.source, n: r.n, record: r.record, reliability: reliability(r.n), single: r.found.length === 1 };
+    state.applied = { d1, d2, source: r.source, n: r.n, record: r.record, reliability: reliability(r.n), single: r.found.length === 1, kept };
     if (!prev || prev.d1 !== d1 || prev.d2 !== d2) {
       [["transWheelDiameter1", d1], ["transWheelDiameter2", d2]].forEach(([id, d]) => {
         const el = $id(id); if (!el) return; el.value = d; el.dataset.calcule = "1";
@@ -254,7 +289,7 @@
     }
     showOrigin();
     try { window.DiagnosticTGV?.refresh?.(); } catch (e) { /* préconisations recalculées avec les nouveaux diamètres */ }
-    if (!auto) setInfo(`Diamètres calculés appliqués : E1 = ${d1} mm, E2 = ${d2} mm. ${SI_ESSIEUX}`);
+    if (!auto) setInfo(kept ? `Le son confirme les cotes saisies (${d1} / ${d2} mm) : un seul pic à ${fmt(r.found[0].d, 1)} mm, les deux essieux ne sont pas séparables. ${SI_ESSIEUX}` : `Diamètres calculés appliqués : E1 = ${d1} mm, E2 = ${d2} mm. ${SI_ESSIEUX}`);
     if (!$id("diagnosticMode")?.classList.contains("hidden")) render();
   }
   function showOrigin() {
@@ -263,6 +298,7 @@
     if (!box && grid) { box = document.createElement("div"); box.id = "diamOrigin"; box.className = "small diam-origin"; grid.after(box); }
     if (!box) return;
     const a = state.applied, manual = ["transWheelDiameter1", "transWheelDiameter2"].some((id) => $id(id) && !$id(id).dataset.calcule);
+    if (a && a.kept) { box.innerHTML = `<b>Cotes saisies confirmées par le son</b> (${a.d1} / ${a.d2} mm) : un seul pic, les deux essieux ne sont pas séparables au son.`; box.dataset.calc = ""; return; }
     box.innerHTML = a && !manual
       ? `<b>Diamètres calculés</b> à partir du sifflement (${a.source === "direct" ? "acquisition en direct" : "fichier"}, ${a.n} s, ${a.reliability}) — à vérifier dans SI-Essieux (2 essieux de tête).`
       : "<b>Diamètres non calculés</b> : valeurs de réglage. Lancez « Calculer les diamètres E1 / E2 » (onglet Diagnostic) ou faites une acquisition en traction.";
@@ -320,13 +356,13 @@
   }
   function liveCompute() {
     const E = LIVE_DS.map((_, j) => (live.cnt[j] ? live.sum[j] / live.cnt[j] : NaN));
-    const { base, peaks } = curvePeaks(LIVE_DS, E);
+    const { base, peaks, rejected } = curvePeaks(LIVE_DS, E);
     const found = peaks.map((j) => {
       let d = LIVE_DS[j];
       if (j > 0 && j < E.length - 1) { const l = E[j - 1], c = E[j], r = E[j + 1], den = l - 2 * c + r; if (Math.abs(den) > 1e-9) d += Math.max(-1, Math.min(1, (0.5 * (l - r)) / den)); }
       return { d, prom: E[j] - base, em: E[j], stat: 0 };
     }).sort((a, b) => a.d - b.d);
-    live.result = { source: "direct", record: "Acquisition en cours sur cet appareil", Ds: LIVE_DS, E, base, found, n: live.n, vMin: live.vMin, vMax: live.vMax, traction: true };
+    live.result = { source: "direct", record: "Acquisition en cours sur cet appareil", Ds: LIVE_DS, E, base, found, rejected, n: live.n, vMin: live.vMin, vMax: live.vMax, traction: true };
     // l'affichage de l'onglet Diagnostic suit le direct tant qu'aucun calcul sur fichier n'a été demandé
     if (!state.result || state.result.source === "direct") { state.result = live.result; if (!$id("diagnosticMode")?.classList.contains("hidden")) render(); if (live.n >= MIN_SECONDS && found.length) apply(true); }
   }

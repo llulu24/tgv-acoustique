@@ -1,6 +1,6 @@
 /* Analyse Acoustique TGV — v0.9.6
- * Onglet « Analyse de fichiers » : analyse de la raie gênante d'un fichier audio.
- * Suivi de la raie dans le temps, spectre en ordres (vitesse compensée),
+ * Onglet « Analyse de fichiers » : analyse de la fréquence gênante d'un fichier audio.
+ * Suivi de la fréquence dans le temps, spectre en ordres (vitesse compensée),
  * bandes latérales 1/27, 1/41, 1/51, harmonique 2, identification de l'organe,
  * vitesse par saisie, rampe ou CSV d'acquisition, envoi vers le diagramme de Campbell,
  * rapport HTML simple.
@@ -133,7 +133,7 @@
     }
   }
 
-  /* ---------- 1. suivi de la raie trame par trame ---------- */
+  /* ---------- 1. suivi de la fréquence trame par trame ---------- */
   /* Étape 1 — suivi du pic dans le temps.
    * FFT de ≈ 1 s (8 192 points à 8 kHz, pas en fréquence ≈ 1 Hz) avec fenêtre de Hann.
    * Le pas entre deux spectres s'adapte à la durée (≈ 3 000 spectres au plus) pour qu'un
@@ -189,7 +189,7 @@
     return { frames, N, binHz, sr };
   }
 
-  /* trames tonales continues : plus longue suite avec trous ≤ 2 s, raie continue */
+  /* trames tonales continues : plus longue suite avec trous ≤ 2 s, fréquence continue */
   function longestRun(frames) {
     const ok = frames.map((f) => Number.isFinite(f.peakHz) && Number.isFinite(f.prom) && f.prom >= 10);
     let best = null, cur = null, lastOk = -1;
@@ -217,7 +217,7 @@
   }
 
   /* ---------- 2. spectre en ordres (vitesse compensée) ---------- */
-  /* suivi lissé de la raie : interpolation linéaire, phase intégrée exactement par segment */
+  /* suivi lissé de la fréquence : interpolation linéaire, phase intégrée exactement par segment */
   /* Courbe de fréquence et PHASE du sifflement.
    * La fréquence mesurée est lissée (moyenne glissante sur 5 points) puis interpolée
    * linéairement entre les points. La phase φ(t) = nombre de « cycles » d'engrènement
@@ -258,7 +258,7 @@
     await pause();
     const F = fftReal(out), half = M >> 1, db = new Float32Array(half);
     for (let i = 0; i < half; i++) db[i] = 10 * Math.log10(F.re[i] * F.re[i] + F.im[i] * F.im[i] + 1e-30);
-    const orderStep = 1 / (M * dphi); // ordre de la raie par case
+    const orderStep = 1 / (M * dphi); // ordre de la fréquence par case
     const fMid = fAt((tA + tB) / 2);
     return { db, orderStep, fMid, duration: tB - tA, cycles: phiEnd };
   }
@@ -357,7 +357,7 @@
       render();
       setInfo(`Analyse terminée : sifflement suivi sur ${fmt(tB - tA, 1)} s.`);
     } catch (error) {
-      console.error("Analyse raie", error); setInfo("Erreur pendant l’analyse : " + (error?.message || error), true);
+      console.error("Analyse fréquence", error); setInfo("Erreur pendant l’analyse : " + (error?.message || error), true);
     } finally { state.busy = false; $id("toneRun").disabled = !records.length; }
   }
 
@@ -372,7 +372,7 @@
     const trend = Math.abs(slope) < 0.05 ? "stable (vitesse constante)" : slope > 0 ? "en hausse (accélération)" : "en baisse (décélération)";
     const tnr = median(runFrames.map((f) => f.tnr)), bandMax = runFrames.reduce((a, b) => (b.bandDb > a.bandDb ? b : a));
     lines.push(`Sifflement suivi de <b>${fmt(f0)} à ${fmt(f1)} Hz</b> sur ${fmt(tB - tA, 1)} s (${fmt(tA, 1)}–${fmt(tB, 1)} s) : ${trend}, ${fmt(slope, 2)} Hz/s. Écart des mesures au suivi lissé : ${fmt(sd, 1)} Hz.`);
-    lines.push(`Émergence du sifflement : ${fmt(median(runFrames.map((f) => f.prom)), 0)} dB au-dessus du bruit voisin (trames de 1 s), ${fmt(ord.toneEmergence, 0)} dB dans le spectre en ordres ; rapport tonal ISO 1996-2 simplifié ${fmt(tnr, 1)} dB` + (tnr >= 8 ? " (tonalité nettement émergente)." : tnr < 3 ? " (raie fine dans un bruit large bande fort : l’oreille la perçoit surtout si le bruit de fond baisse)." : ".") + ` Niveau maximal de la bande 1 500–1 700 Hz à ${fmt(bandMax.t, 1)} s.`);
+    lines.push(`Émergence du sifflement : ${fmt(median(runFrames.map((f) => f.prom)), 0)} dB au-dessus du bruit voisin (trames de 1 s), ${fmt(ord.toneEmergence, 0)} dB dans le spectre en ordres ; rapport tonal ISO 1996-2 simplifié ${fmt(tnr, 1)} dB` + (tnr >= 8 ? " (tonalité nettement émergente)." : tnr < 3 ? " (fréquence fine dans un bruit large bande fort : l’oreille la perçoit surtout si le bruit de fond baisse)." : ".") + ` Niveau maximal de la bande 1 500–1 700 Hz à ${fmt(bandMax.t, 1)} s.`);
 
     // identification par la vitesse
     const cfg = getTransmissionConfig();
@@ -396,7 +396,7 @@
     lines.push("Bandes latérales (−/+ par rapport au sifflement ; émergence au-dessus du plancher) : " + ord.sb.map((b) => `±${fmt(b.spacingHz, 1)} Hz (1/${b.teeth}) ${fmt(b.lowRel)} / ${fmt(b.highRel)} dB, émergence ${fmt(b.emergence)} dB`).join(" ; ") + ".");
     const top = sbs[0], second = sbs[1];
     if (top.emergence >= 10 && top.emergence - second.emergence >= 4) {
-      lines.push(`→ <b>Modulation dominante à ±${fmt(top.spacingHz, 1)} Hz : ${top.label}</b>. Pistes : faux-rond, excentricité, défaut localisé de denture, roulement de cet arbre.` + (Number.isFinite(top.h2Emergence) && top.h2Emergence >= 8 ? " Les mêmes bandes latérales existent autour de l’harmonique 2 : c’est bien une modulation de la raie, pas une raie d’un autre essieu." : ""));
+      lines.push(`→ <b>Modulation dominante à ±${fmt(top.spacingHz, 1)} Hz : ${top.label}</b>. Pistes : faux-rond, excentricité, défaut localisé de denture, roulement de cet arbre.` + (Number.isFinite(top.h2Emergence) && top.h2Emergence >= 8 ? " Les mêmes bandes latérales existent autour de l’harmonique 2 : c’est bien une modulation de la fréquence, pas une fréquence d’un autre essieu." : ""));
     } else if (top.emergence >= 10) lines.push("→ Plusieurs familles de bandes latérales d’émergence voisine : modulation non attribuable à un seul arbre.");
     else lines.push("→ Pas de bande latérale marquée : sifflement d’engrènement peu modulé (excitation régulière, la gêne vient surtout du niveau et de la résonance).");
     if (Number.isFinite(ord.h2Emergence)) lines.push(`Harmonique 2 (${fmt(2 * os.fMid)} Hz) : ${fmt(ord.h2Rel)} dB par rapport au sifflement, émergence ${fmt(ord.h2Emergence)} dB.`);
@@ -427,28 +427,73 @@
   }
   function blank(canvas, h, text) { const { ctx, w } = prep(canvas, h); ctx.fillStyle = "#4D4F53"; ctx.textAlign = "center"; ctx.fillText(text, w / 2, h / 2); ctx.textAlign = "left"; }
 
+  /* Suivi du sifflement, version lisible (v1.2) :
+   *  - le niveau de bande est LISSÉ (moyenne glissante ~20 s) ; le brut reste en filigrane ;
+   *  - les points de fréquence aberrants (loin de la médiane locale) sont écartés ; une courbe médiane montre la tendance ;
+   *  - une bande de vitesse + régime (traction / érre / freinage) est tracée sous le graphique, sur le même axe de temps. */
   function drawTrack() {
-    const canvas = $id("toneTrackCanvas"), H = 280, R = state.result;
+    const canvas = $id("toneTrackCanvas"), H = 400, R = state.result;
     if (!R || !R.tr) { blank(canvas, H, "Suivi du sifflement : lancez l’analyse."); return; }
     const { ctx, w, h } = prep(canvas, H);
-    const L = 58, Rr = 58, T = 26, B = 36, pw = w - L - Rr, ph = h - T - B;
-    const fr = R.tr.frames, tMax = fr.at(-1)?.t || 1;
-    const tonal = fr.filter((f) => Number.isFinite(f.peakHz) && f.prom >= 10);
-    const fs = (R.runFrames || tonal).map((f) => f.peakHz);
-    let fMin = Math.min(...fs, R.fLo), fMax = Math.max(...fs, R.fLo + 50);
-    if (R.runFrames) { fMin = Math.min(...fs) - 10; fMax = Math.max(...fs) + 10; }
-    const bd = fr.map((f) => f.bandDb), bMax = Math.ceil(Math.max(...bd) / 5) * 5, bMin = bMax - 40;
-    const X = (t) => L + (t / tMax) * pw, Y = (f) => T + ph - ((f - fMin) / (fMax - fMin)) * ph, Yb = (b) => T + ph - ((Math.max(bMin, b) - bMin) / (bMax - bMin)) * ph;
-    ctx.strokeStyle = "#E1E1E1";
-    for (let i = 0; i <= 4; i++) { const y = T + (ph * i) / 4; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.fillStyle = "#0088CE"; ctx.fillText(fmt(fMax - ((fMax - fMin) * i) / 4), 8, y + 4); ctx.fillStyle = "#E05206"; ctx.fillText(fmt(bMax - (40 * i) / 4), L + pw + 6, y + 4); }
-    if (R.tA !== undefined) { ctx.fillStyle = "rgba(110,30,120,.07)"; ctx.fillRect(X(R.tA), T, X(R.tB) - X(R.tA), ph); }
-    ctx.strokeStyle = "#E05206"; ctx.lineWidth = 1.3; ctx.beginPath(); fr.forEach((f, i) => (i ? ctx.lineTo(X(f.t), Yb(f.bandDb)) : ctx.moveTo(X(f.t), Yb(f.bandDb)))); ctx.stroke();
-    ctx.fillStyle = "#0088CE"; tonal.forEach((f) => { if (f.peakHz >= fMin && f.peakHz <= fMax) { ctx.beginPath(); ctx.arc(X(f.t), Y(f.peakHz), 2.2, 0, Math.PI * 2); ctx.fill(); } });
-    if (R.track) { ctx.strokeStyle = "#6E1E78"; ctx.lineWidth = 2; ctx.beginPath(); for (let i = 0; i <= 200; i++) { const t = R.tA + ((R.tB - R.tA) * i) / 200, f = R.track.fAt(t); i ? ctx.lineTo(X(t), Y(f)) : ctx.moveTo(X(t), Y(f)); } ctx.stroke(); }
+    const L = 58, Rr = 58, T = 40, pw = w - L - Rr, ph = 230, sy0 = T + ph + 34, sh = 56;
+    const fr = R.tr.frames, tMax = fr.at(-1)?.t || 1, X = (t) => L + (t / tMax) * pw;
+    const med = (a) => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : NaN; };
+    const dt = fr.length > 1 ? (fr.at(-1).t - fr[0].t) / (fr.length - 1) : 1;
+    const win = (sec) => Math.max(1, Math.round(sec / Math.max(0.05, dt)));
+    // niveau lissé
+    const bd = fr.map((f) => f.bandDb), wl = win(20), lvl = bd.map((_, i) => { let a = 0, n = 0; for (let k = Math.max(0, i - wl); k <= Math.min(bd.length - 1, i + wl); k++) { if (Number.isFinite(bd[k])) { a += Math.pow(10, bd[k] / 10); n++; } } return n ? 10 * Math.log10(a / n) : NaN; });
+    const fin = lvl.filter(Number.isFinite), bMax = Math.ceil(Math.max(...fin) / 5) * 5, bMin = Math.floor(Math.min(...fin) / 5) * 5 - 2;
+    const Yb = (b) => T + ph - ((Math.max(bMin, Math.min(bMax, b)) - bMin) / (bMax - bMin)) * ph;
+    // points de fréquence nets, puis écart aux voisins (médiane locale ± 3 × écart médian)
+    // en dessous de 60 km/h le sifflement d'engrènement n'est pas exploitable : on ne trace que les points au-dessus (si la vitesse est connue)
+    const spRows = (window.CampbellTGV?._state?.rows || []).filter((r) => Number.isFinite(r.t) && Number.isFinite(r.speed));
+    const spAt = (t) => { if (spRows.length < 4) return null; let lo = 0, hi = spRows.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (spRows[m].t < t) lo = m + 1; else hi = m; } return spRows[lo].speed; };
+    const tonal = fr.filter((f) => { if (!(Number.isFinite(f.peakHz) && f.prom >= 10)) return false; const v = spAt(f.t); return v === null || v >= 60; }), wf = win(30);
+    const good = [], trend = [];
+    tonal.forEach((f, i) => {
+      const nb = []; for (let k = Math.max(0, i - 12); k <= Math.min(tonal.length - 1, i + 12); k++) if (Math.abs(tonal[k].t - f.t) <= wf * dt) nb.push(tonal[k].peakHz);
+      if (nb.length < 4) return;
+      const m = med(nb), mad = med(nb.map((v) => Math.abs(v - m))) || 1;
+      if (Math.abs(f.peakHz - m) <= Math.max(6, 3 * 1.4826 * mad)) good.push(f);
+      trend.push({ t: f.t, f: m });
+    });
+    const fs = (good.length ? good : tonal).map((f) => f.peakHz).sort((a, b) => a - b);
+    let fMin = fs.length ? fs[Math.floor(0.02 * (fs.length - 1))] : R.fLo, fMax = fs.length ? fs[Math.ceil(0.98 * (fs.length - 1))] : R.fLo + 50;
+    if (R.runFrames && R.runFrames.length) { const rf = R.runFrames.map((f) => f.peakHz); fMin = Math.min(fMin, ...rf); fMax = Math.max(fMax, ...rf); }
+    const pad = Math.max(4, (fMax - fMin) * 0.12); fMin -= pad; fMax += pad;
+    const Y = (f) => T + ph - ((f - fMin) / (fMax - fMin)) * ph;
+    // fond et grille
+    ctx.strokeStyle = "#E1E1E1"; ctx.fillStyle = "#0088CE";
+    for (let i = 0; i <= 4; i++) { const y = T + (ph * i) / 4; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.fillStyle = "#0088CE"; ctx.textAlign = "right"; ctx.fillText(fmt(fMax - ((fMax - fMin) * i) / 4), L - 6, y + 4); ctx.fillStyle = "#E05206"; ctx.textAlign = "left"; ctx.fillText(fmt(bMax - ((bMax - bMin) * i) / 4), L + pw + 6, y + 4); }
+    ctx.textAlign = "left";
+    if (R.tA !== undefined) { ctx.fillStyle = "rgba(110,30,120,.10)"; ctx.fillRect(X(R.tA), T, Math.max(2, X(R.tB) - X(R.tA)), ph + 34 + sh); ctx.fillStyle = "#6E1E78"; ctx.fillText("passage analysé", Math.min(L + pw - 90, X(R.tA)), T - 6); }
+    // niveau : brut en filigrane, lissé en trait épais
+    ctx.strokeStyle = "rgba(224,82,6,.22)"; ctx.lineWidth = 1; ctx.beginPath(); fr.forEach((f, i) => (i ? ctx.lineTo(X(f.t), Yb(f.bandDb)) : ctx.moveTo(X(f.t), Yb(f.bandDb)))); ctx.stroke();
+    ctx.strokeStyle = "#E05206"; ctx.lineWidth = 2.6; ctx.beginPath(); fr.forEach((f, i) => { if (!Number.isFinite(lvl[i])) return; i ? ctx.lineTo(X(f.t), Yb(lvl[i])) : ctx.moveTo(X(f.t), Yb(lvl[i])); }); ctx.stroke();
+    // fréquence : points nets (transparents) + tendance
+    ctx.fillStyle = "rgba(0,136,206,.40)"; good.forEach((f) => { if (f.peakHz >= fMin && f.peakHz <= fMax) { ctx.beginPath(); ctx.arc(X(f.t), Y(f.peakHz), 2, 0, Math.PI * 2); ctx.fill(); } });
+    if (trend.length > 1) { ctx.strokeStyle = "#0066A1"; ctx.lineWidth = 2; ctx.beginPath(); let st = false, last = -1e9; trend.forEach((q) => { const x = X(q.t); if (q.t - last > 60) st = false; st ? ctx.lineTo(x, Y(q.f)) : (ctx.moveTo(x, Y(q.f)), st = true); last = q.t; }); ctx.stroke(); }
+    if (R.track) { ctx.strokeStyle = "#6E1E78"; ctx.lineWidth = 2.4; ctx.beginPath(); for (let i = 0; i <= 200; i++) { const t = R.tA + ((R.tB - R.tA) * i) / 200, f = R.track.fAt(t); i ? ctx.lineTo(X(t), Y(f)) : ctx.moveTo(X(t), Y(f)); } ctx.stroke(); }
     ctx.lineWidth = 1; ctx.strokeStyle = "#3C3732"; ctx.strokeRect(L, T, pw, ph);
-    ctx.fillStyle = "#4D4F53"; for (let i = 0; i <= 5; i++) ctx.fillText(fmt((tMax * i) / 5, 0) + " s", X((tMax * i) / 5) - 10, T + ph + 16);
-    ctx.fillStyle = "#3C3732"; ctx.font = "13px Segoe UI, system-ui, sans-serif";
-    ctx.fillText("Fréquence du sifflement (points bleus, Hz à gauche) et niveau de bande 1 500–1 700 Hz (orange, dB à droite)", L, T - 9);
+    // bande vitesse + régime
+    const rows = (window.CampbellTGV?._state?.rows || []).filter((r) => Number.isFinite(r.t) && Number.isFinite(r.speed));
+    ctx.fillStyle = "#4D4F53"; ctx.font = "11px Segoe UI, system-ui, sans-serif";
+    if (rows.length > 3) {
+      const vMax = Math.max(60, Math.ceil(Math.max(...rows.map((r) => r.speed)) / 50) * 50), Yv = (v) => sy0 + sh - (v / vMax) * sh;
+      const col = { Traction: "#D52B1E", Erre: "#0088CE", Freinage: "#82BE00" };
+      ctx.strokeStyle = "#E1E1E1"; ctx.strokeRect(L, sy0, pw, sh);
+      rows.forEach((r, i) => { const nx = rows[i + 1] ? rows[i + 1].t : r.t + 1, x0 = X(r.t), x1 = Math.max(x0 + 1, X(nx)); ctx.fillStyle = col[r.regime] || "#A0A0A0"; ctx.globalAlpha = 0.28; ctx.fillRect(x0, Yv(r.speed), x1 - x0, sy0 + sh - Yv(r.speed)); ctx.globalAlpha = 1; });
+      ctx.strokeStyle = "#3C3732"; ctx.lineWidth = 1.2; ctx.beginPath(); rows.forEach((r, i) => (i ? ctx.lineTo(X(r.t), Yv(r.speed)) : ctx.moveTo(X(r.t), Yv(r.speed)))); ctx.stroke();
+      ctx.fillStyle = "#4D4F53"; ctx.textAlign = "right"; ctx.fillText(vMax + " km/h", L - 6, sy0 + 8); ctx.fillText("0", L - 6, sy0 + sh); ctx.textAlign = "left";
+      let lx = L; [["Traction", "#D52B1E"], ["Érre", "#0088CE"], ["Freinage", "#82BE00"]].forEach(([t, c]) => { ctx.fillStyle = c; ctx.globalAlpha = 0.5; ctx.fillRect(lx, sy0 + sh + 8, 12, 8); ctx.globalAlpha = 1; ctx.fillStyle = "#4D4F53"; ctx.fillText(t, lx + 16, sy0 + sh + 16); lx += 84; });
+      ctx.fillText("vitesse (ligne noire) et régime (couleur)", lx + 10, sy0 + sh + 16);
+    } else { ctx.fillStyle = "#747678"; ctx.fillText("Pas de vitesse pour ce fichier : bande vitesse / régime indisponible.", L, sy0 + 20); }
+    ctx.font = "12px Segoe UI, system-ui, sans-serif"; ctx.fillStyle = "#4D4F53";
+    for (let i = 0; i <= 5; i++) ctx.fillText(fmt((tMax * i) / 5, 0) + " s", X((tMax * i) / 5) - 10, T + ph + 16);
+    ctx.font = "13px Segoe UI, system-ui, sans-serif";
+    ctx.fillStyle = "#0088CE"; ctx.fillText("● fréquence du sifflement (Hz, gauche), trait bleu foncé = tendance — mesurée au-dessus de 60 km/h", L, 14);
+    ctx.fillStyle = "#E05206"; ctx.fillText("▬ niveau lissé 1 500–1 700 Hz (dB, droite)", L, 30);
+    ctx.fillStyle = "#6E1E78"; ctx.fillText("▬ courbe retenue pour l’analyse fine", L + 300, 30);
   }
 
   function drawOrders() {
