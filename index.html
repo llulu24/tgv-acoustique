@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
 
-<title>Analyse Acoustique TGV — v0.9.8 Rust</title>
+<title>Analyse Acoustique TGV — v1.0 Rust</title>
 <style>
 :root{
   color-scheme:light dark;
@@ -440,7 +440,7 @@ button:disabled{background:#D7D7D7!important;color:#4D4F53!important;border-colo
 		<p>Developpement LEONE Ludovic</p>
       </div>
     </div>
-    <div class="top-badge" id="topBadge">Version 0.9.9 Diagnostic — build 02/11 h</div>
+    <div class="top-badge" id="topBadge">Version 1.6 — build 06/11</div>
   </div>
 </header>
 
@@ -449,6 +449,7 @@ button:disabled{background:#D7D7D7!important;color:#4D4F53!important;border-colo
     <button id="modeAcquisition" role="tab" aria-selected="false" aria-controls="acquisitionMode">Acquisition</button>
     <button id="modeAnalysis" class="active" role="tab" aria-selected="true" aria-controls="analysisMode">Fichiers</button>
     <button id="modeDiagnostic" role="tab" aria-selected="false" aria-controls="diagnosticMode">Diagnostic</button>
+    <button id="modeLecteur" role="tab" aria-selected="false" aria-controls="lecteurMode">Lecteur</button>
   </div>
 
   <div id="pwaBar" class="pwa-bar screen-only">
@@ -525,6 +526,18 @@ button:disabled{background:#D7D7D7!important;color:#4D4F53!important;border-colo
       <input id="commonTolerance" type="number" value="8" min="1" max="50" step="1">
 
       <div class="weighting-simple"><label><input id="aWeighting" type="checkbox"> Affichage pondéré A</label><span id="aWeightingState">Spectre brut affiché.</span></div>
+
+      <div class="weighting-simple"><label style="display:flex;gap:8px;align-items:center"><input id="showRawOverlay" type="checkbox" style="width:auto"> Superposer le spectre brut (gris) pour voir l’atténuation A</label></div>
+      <div class="weighting-simple"><label for="hideBelow">Masquer les fréquences sous</label> <input id="hideBelow" type="number" min="0" max="1000" step="10" value="0" style="width:90px"> Hz <span class="small">(affichage seulement, 0 = tout afficher)</span></div>
+
+      <details class="frequency-calibration"><summary>Calibration de niveau (dB SPL / dB(A))</summary>
+        <div class="frequency-calibration-help">Sans calibration, les niveaux sont relatifs (négatifs). Choisissez une méthode puis cliquez : le fichier affiché sert de référence.</div>
+        <div class="frequency-calibration-reference"><label for="levelCalSonoValue">Niveau moyen mesuré au sonomètre sur ce fichier</label><div><input id="levelCalSonoValue" type="number" step="0.1" placeholder="ex. 81"><span>dB(A)</span> <button id="levelCalSono" type="button">Caler</button></div></div>
+        <div class="frequency-calibration-reference"><label for="levelCalToneValue">Calibrateur (fichier = enregistrement du calibrateur à 1 kHz)</label><div><input id="levelCalToneValue" type="number" step="0.1" value="94"><span>dB</span> <button id="levelCalTone" type="button">Caler</button></div></div>
+        <div class="frequency-calibration-reference"><label for="levelCalManualValue">Décalage connu (dB)</label><div><input id="levelCalManualValue" type="number" step="0.1" placeholder="ex. 110.7"> <button id="levelCalManual" type="button">Appliquer</button></div></div>
+        <div class="frequency-calibration-actions"><button id="levelCalReset" type="button" class="secondary">Réinitialiser</button></div>
+        <div id="levelCalStatus" class="frequency-calibration-status neutral">Calibration inactive.</div>
+      </details>
 
       <details class="frequency-calibration"><summary>Calibration en fréquence</summary><div class="frequency-calibration-reference"><label for="frequencyCalibrationReference">Fréquence de référence</label><div><input id="frequencyCalibrationReference" type="number" min="20" max="5000" step="0.1" value="1000"><span>Hz</span></div></div><div class="frequency-calibration-actions"><button id="frequencyCalibrationMeasure" type="button">Mesurer</button><button id="frequencyCalibrationApply" type="button" class="secondary" disabled>Appliquer</button><button id="frequencyCalibrationReset" type="button" class="secondary">Réinitialiser</button></div><div class="frequency-calibration-help">Utilise le fichier actuellement affiché.</div><div id="frequencyCalibrationStatus" class="frequency-calibration-status neutral">Calibration inactive.</div></details>
 
@@ -775,6 +788,44 @@ button:disabled{background:#D7D7D7!important;color:#4D4F53!important;border-colo
   </section>
 
 
+  <section id="lecteurMode" class="mode-panel hidden screen-only" role="tabpanel" aria-labelledby="modeLecteur">
+
+      <section class="card panel" id="lecteurCard" style="margin:12px 0;padding:14px">
+        <h2 style="margin-top:0">Lecteur audio et filtre</h2>
+        <label style="display:block;margin:8px 0">Fichier écouté <select id="lecRecord"></select></label>
+        <div class="small">Écoutez le fichier choisi. Le filtre peut couper (ou isoler) la fréquence d’un organe en suivant la vitesse du train : si le bruit gênant disparaît, c’est cette fréquence qui le produit.</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0">
+          <button id="lecPlay" type="button">▶ Lecture</button><button id="lecStop" type="button" class="secondary">■ Arrêt</button>
+          <input id="lecPos" type="range" min="0" max="1" step="0.1" value="0" style="flex:1;min-width:160px"><span id="lecTime">0:00 / 0:00</span>
+        </div>
+        <div id="lecNow" class="small">—</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin:10px 0">
+          <label>Filtre<select id="lecFilter"><option value="off">Aucun</option><option value="notch" selected>Couper la fréquence (coupe-bande)</option><option value="solo">Écouter seulement cette fréquence</option></select></label>
+          <label>Fréquence suivie<select id="lecOrgan"><option value="red1">Engrènement réducteur</option><option value="red2">2ᵉ harmonique de l’engrènement réducteur</option><option value="pont1">Engrènement pont</option><option value="pont2">2ᵉ harmonique de l’engrènement pont</option><option value="fixe">Fréquence fixe (Hz)</option></select></label>
+          <label>Fréquence fixe (Hz)<input id="lecFixe" type="number" min="30" max="3900" value="1700"></label>
+          <label>Diamètre de roue (mm)<span style="display:flex;gap:6px"><input id="lecDiam" type="number" min="800" max="1000" value="897"><button id="lecDiamFromApp" type="button" class="secondary">Prendre celui du logiciel</button></span></label>
+          <label>Largeur du filtre (± % total)<input id="lecWidth" type="number" min="0.5" max="20" step="0.5" value="4"></label>
+          <label>Volume (dB) <span id="lecGainVal">0</span><input id="lecGain" type="range" min="-30" max="30" value="0" oninput="document.getElementById('lecGainVal').textContent=this.value"></label>
+          <label>Couper les graves sous (Hz, 0 = non)<input id="lecHP" type="number" min="0" max="500" step="10" value="0"></label>
+        </div>
+        <div id="lecFreq" class="small">filtre inactif</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0">
+          <button id="lecA" type="button" class="secondary">Début de boucle ici</button><button id="lecB" type="button" class="secondary">Fin de boucle ici</button><button id="lecClear" type="button" class="secondary">Sans boucle</button><span id="lecLoopInfo" class="small">Pas de boucle</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0">
+          <span class="small">Trouver un passage :</span>
+          <select id="lecFindRegime"><option>Traction</option><option>Erre</option><option>Freinage</option></select>
+          de <input id="lecFindV0" type="number" value="120" style="width:80px"> à <input id="lecFindV1" type="number" value="140" style="width:80px"> km/h
+          <button id="lecFind" type="button">Chercher et lire en boucle</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <button id="lecExportO" type="button" class="secondary">Exporter l’extrait (original, WAV)</button><button id="lecExportF" type="button" class="secondary">Exporter l’extrait (filtré, WAV)</button>
+        </div>
+        <div id="lecStatus" class="small" style="margin-top:8px"></div>
+        <div class="small" style="margin-top:6px">Réglez le volume du casque bas avant d’écouter. Si le grondement des graves masque le bruit, coupez-les (par exemple sous 100 Hz). Les enregistrements de cabine peuvent contenir des voix : à partager avec précaution.</div>
+      </section>
+</section>
+
   <section id="diagnosticMode" class="mode-panel hidden screen-only" role="tabpanel" aria-labelledby="modeDiagnostic">
     <section class="card panel diag-head">
       <h2 style="margin-top:0">Diagnostic</h2>
@@ -796,7 +847,10 @@ button:disabled{background:#D7D7D7!important;color:#4D4F53!important;border-colo
           <div class="campbell-toolbar">
             <label>Régime affiché<select id="campbellRegimeFilter"><option value="">Tous</option><option>Traction</option><option>Erre</option><option>Freinage</option></select></label>
             <label>Plage<select id="campbellRange"><option value="0-2500">0–2 500 Hz</option><option value="1000-2500" selected>1 000–2 500 Hz</option><option value="1300-1900">1 300–1 900 Hz</option></select></label>
+            <label>Axe vertical<select id="campbellAxis"><option value="freq" selected>Fréquence (Hz)</option><option value="ordre">Ordre (Hz par km/h) : droites horizontales</option></select></label>
+            <label>Couleurs<select id="campbellWeight"><option value="fond" selected>Fond retiré (lignes bien visibles)</option><option value="A">Pondération A</option><option value="brut">Brut (niveau mesuré)</option></select></label>
             <label class="campbell-check"><input id="campbellTheory" type="checkbox" checked> Droites d’engrènement E1/E2</label>
+            <label class="campbell-check"><input id="campbellHarm" type="checkbox"> Harmoniques ×1 à ×4</label>
             <button id="campbellRefresh" type="button" class="secondary">Actualiser</button>
             <button id="campbellImportButton" type="button" class="secondary">Importer une acquisition JSON</button>
             <input id="campbellImportFile" type="file" accept=".json,application/json" class="hidden">
@@ -1082,7 +1136,7 @@ button:disabled{background:#D7D7D7!important;color:#4D4F53!important;border-colo
 
 <footer>
   <div class="footer-box">
-    © Technicentre Le Landy, Leone Ludovic — Version 0.9.7 RC — Usage interne d’aide à l’analyse acoustique.
+    © Technicentre Le Landy, Leone Ludovic — Version 1.2 — Usage interne d’aide à l’analyse acoustique.
   </div>
 </footer>
 
@@ -1102,6 +1156,7 @@ button:disabled{background:#D7D7D7!important;color:#4D4F53!important;border-colo
 <script src="./source/wav-decoder-v096.js"></script>
 <script src="./source/wav-recorder-v096.js"></script>
 <script src="./source/campbell-v096.js"></script>
+<script src="./source/lecteur-v0910.js"></script>
 <script src="./source/dominante-v098.js"></script>
 <script src="./source/enquete-v099.js"></script>
 <script src="./source/autotest-v099.js"></script>
@@ -1115,6 +1170,7 @@ button:disabled{background:#D7D7D7!important;color:#4D4F53!important;border-colo
 <script src="./source/affichage-v096.js"></script>
 <script src="./source/sessions-v096.js"></script>
 <link rel="stylesheet" href="./source/theme-v097.css">
+<link rel="stylesheet" href="./source/interface-v0911.css">
 <script src="./source/ergonomie-v097.js"></script>
 </body>
 </html>

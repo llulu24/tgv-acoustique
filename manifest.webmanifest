@@ -1,8 +1,8 @@
 {
   "id": "analyse-acoustique-tgv-v098-rust",
-  "name": "Analyse Acoustique TGV — v0.9.8 Rust",
+  "name": "Analyse Acoustique TGV — v1.0 Rust",
   "short_name": "TGV Rust",
-  "description": "Version 0.9.8 Rust (noyau de calcul Rust/WebAssembly) : analyse acoustique, acquisition GPS, diagramme de Campbell et comparaison traction / erre.",
+  "description": "Version 1.0 (noyau de calcul Rust/WebAssembly) : analyse acoustique, acquisition GPS, diagramme de Campbell et comparaison traction / erre.",
   "lang": "fr",
   "start_url": "./index.html",
   "scope": "./",
