@@ -65,3 +65,17 @@ html.ux #lecStatus{padding:10px 12px;border-radius:10px;background:#F6F6F6;borde
 html.ux #lecteurCard{gap:10px}
 html.ux #lecteurCard p,html.ux #lecteurCard .hint{margin:0}
 html.ux #lecteurCard label{margin:0}
+
+/* v1.7 — comparaison de deux accompagnements */
+.cmp-panel{margin-top:18px}
+.cmp-help{margin:4px 0 12px;color:var(--muted,#5b5e60)}
+.cmp-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;align-items:end}
+.cmp-form label{display:flex;flex-direction:column;gap:5px;font-weight:600;font-size:13px}
+.cmp-form input[type=text]{padding:9px;border:1px solid var(--border,#d9dadb);border-radius:8px}
+.cmp-status{margin:10px 0;min-height:20px;font-size:13px}
+.cmp-status.bad{color:#C8102E;font-weight:600}
+.cmp-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.cmp-canvas{width:100%;display:block;border:1px solid var(--border,#d9dadb);border-radius:10px;margin:8px 0}
+.cmp-result h4{margin:18px 0 6px}
+.cmp-scroll{overflow-x:auto}
+.cmp-result td.cmp-lab{font-weight:600}

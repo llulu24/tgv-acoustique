@@ -440,7 +440,7 @@ button:disabled{background:#D7D7D7!important;color:#4D4F53!important;border-colo
 		<p>Developpement LEONE Ludovic</p>
       </div>
     </div>
-    <div class="top-badge" id="topBadge">Version 1.6 — build 06/11</div>
+    <div class="top-badge" id="topBadge">Version 1.8 — build 10/11</div>
   </div>
 </header>
 
@@ -1128,6 +1128,28 @@ button:disabled{background:#D7D7D7!important;color:#4D4F53!important;border-colo
       </table>
     </div>
   </section>
+
+  <section id="comparePanel" class="card cmp-panel">
+    <h2>Comparer deux accompagnements</h2>
+    <p class="cmp-help">Choisissez deux accompagnements de la même rame à deux dates (ZIP ou JSON). Le plus ancien est pris comme « avant ».</p>
+    <div class="cmp-form">
+      <label>Accompagnement 1<input id="cmpFileA" type="file" accept=".zip,.json,application/zip,application/json"></label>
+      <label>Accompagnement 2<input id="cmpFileB" type="file" accept=".zip,.json,application/zip,application/json"></label>
+      <label>Conditions de mesure, accompagnement 1 (facultatif)<input id="cmpCondA" type="text" placeholder="ex. appareil à droite de la motrice"></label>
+      <label>Conditions de mesure, accompagnement 2 (facultatif)<input id="cmpCondB" type="text" placeholder="ex. appareil à gauche de la motrice"></label>
+      <label>Intervention entre les deux (facultatif)<input id="cmpNote" type="text" placeholder="ex. plein d’huile des deux réducteurs"></label>
+      <button id="cmpRun" type="button">Comparer</button>
+    </div>
+    <div id="cmpStatus" class="cmp-status" role="status"></div>
+    <div id="cmpOut" class="hidden">
+      <div class="cmp-actions">
+        <button id="cmpHtml" type="button" class="secondary">Télécharger le rapport (HTML)</button>
+        <button id="cmpCopy" type="button" class="secondary">Copier le texte</button>
+      </div>
+      <canvas id="cmpCanvas" class="cmp-canvas" aria-label="Comparaison des deux accompagnements : vitesse et spectre moyen"></canvas>
+      <div id="cmpResult" class="cmp-result"></div>
+    </div>
+  </section>
   </section>
 
   <!-- Zone dédiée au rapport complet -->
@@ -1136,7 +1158,7 @@ button:disabled{background:#D7D7D7!important;color:#4D4F53!important;border-colo
 
 <footer>
   <div class="footer-box">
-    © Technicentre Le Landy, Leone Ludovic — Version 1.2 — Usage interne d’aide à l’analyse acoustique.
+    © Technicentre Le Landy, Leone Ludovic — Version 1.8 — Usage interne d’aide à l’analyse acoustique.
   </div>
 </footer>
 
@@ -1159,6 +1181,7 @@ button:disabled{background:#D7D7D7!important;color:#4D4F53!important;border-colo
 <script src="./source/lecteur-v0910.js"></script>
 <script src="./source/dominante-v098.js"></script>
 <script src="./source/enquete-v099.js"></script>
+<script src="./source/comparaison-v0912.js"></script>
 <script src="./source/autotest-v099.js"></script>
 <script src="./source/analyse-raie-v096.js"></script>
 <script src="./source/carte-trajet-v096.js"></script>

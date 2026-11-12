@@ -1,6 +1,6 @@
 /* Analyse Acoustique TGV — v0.9.8
  * Fréquences dominantes : quelles fréquences reviennent le plus, à quelle vitesse, dans quel
- * régime, et quelle est leur cause possible.
+ * régime, et quel organe leur correspond.
  * Lit les lignes du diagramme de Campbell (window.CampbellTGV._state.rows) : chaque ligne
  * porte la vitesse, le régime et le spectre sur une grille de 5 Hz (0–2 500 Hz).
  */
@@ -197,31 +197,31 @@
       if (d.organs.length) {
         const txt = d.organs.map((o) => `<b>${esc(o.label)}</b> — diamètre de roue équivalent ${fmt(o.dEq)} mm${axleHint(o.dEq)}`).join(" ; ou ");
         d.cause.push(fam.type === "proportionnelle"
-          ? `La fréquence suit la vitesse (${fmt(k, 2)} Hz par km/h) : ${txt}.`
-          : `Vitesse quasi constante (${rangeTxt}) : on ne peut pas voir si la fréquence suit la vitesse. Si c’est le cas : ${txt}.`);
-        if (d.organs.length > 1) d.cause.push("Plusieurs organes possibles : une variation de vitesse plus large lèvera le doute.");
+          ? `La fréquence suit la vitesse (${fmt(k, 2)} Hz par km/h) et correspond à ${txt}.`
+          : `Vitesse quasi constante (${rangeTxt}) : on ne peut pas établir si la fréquence suit la vitesse. Correspondance éventuelle : ${txt}.`);
+        if (d.organs.length > 1) d.cause.push("Plusieurs organes correspondent à cette fréquence par km/h : une variation de vitesse plus large permettrait de les distinguer.");
         if (BAND[0] / k <= 330) {
           d.bandCross = [BAND[0] / k, BAND[1] / k];
           d.cause.push(`Traverse la bande gênante ${BAND[0]}–${BAND[1]} Hz entre <b>${fmt(d.bandCross[0])} et ${fmt(d.bandCross[1])} km/h</b>${d.bandCross[0] > vHi ? " (au-delà de la plage mesurée)" : ""}.`);
         }
       } else {
         d.cause.push(fam.type === "proportionnelle"
-          ? `La fréquence suit la vitesse (${fmt(k, 2)} Hz par km/h) mais aucun organe de la chaîne ne la produit avec une roue de ${fmt(wheelMin())}–${fmt(wheelMax())} mm : vérifier la vitesse (GPS), les nombres de dents ou une source extérieure liée à la vitesse (roulement, aérodynamique).`
-          : `Vitesse quasi constante (${rangeTxt}) et aucune correspondance avec un organe de la chaîne à cette vitesse : source probablement indépendante de la vitesse.`);
+          ? `La fréquence suit la vitesse (${fmt(k, 2)} Hz par km/h) mais aucun organe de la chaîne de transmission ne lui correspond pour une roue de ${fmt(wheelMin())}–${fmt(wheelMax())} mm.`
+          : `Vitesse quasi constante (${rangeTxt}) et aucun organe de la chaîne de transmission ne correspond à cette fréquence à cette vitesse.`);
       }
     } else { // fixe
       const f0 = fam.f0;
-      if (Math.abs(f0 - 1875) <= 15) d.cause.push("<b>Bip VACMA</b> (1 875 Hz, intermittent) : à exclure du diagnostic.");
+      if (Math.abs(f0 - 1875) <= 15) d.cause.push("<b>Bip VACMA</b> (1 875 Hz, intermittent) : écarté de l’analyse.");
       else {
-        d.cause.push(`Fréquence fixe (~${fmt(f0)} Hz) alors que la vitesse varie de ${fmt(vLo)} à ${fmt(vHi)} km/h : <b>pas un engrènement</b>.`);
-        if (d.load === "charge") d.cause.push("Présente en traction/freinage mais pas en érre : piste <b>électrique de traction</b> (découpage convertisseur, bruit magnétique du moteur) ou résonance excitée par la charge.");
-        else if (d.load === "indep") d.cause.push("Présente aussi en érre : source <b>indépendante de la charge</b> — auxiliaire (ventilation, compresseur, climatisation) ou résonance de structure.");
-        else d.cause.push("Régimes insuffisamment renseignés : marquer Traction / Érre pendant l’acquisition pour départager.");
-        { const m50 = f0 / 50; if (Math.round(m50) >= 1 && Math.abs(m50 - Math.round(m50)) * 50 <= 3) d.cause.push(`Multiple de 50 Hz (${Math.round(m50)} × 50 Hz) : piste <b>auxiliaire alimenté en 50 Hz</b> (ventilation, compresseur) ou ronflement magnétique d’un moteur sur le réseau.`); }
+        d.cause.push(`Fréquence fixe (~${fmt(f0)} Hz) alors que la vitesse varie de ${fmt(vLo)} à ${fmt(vHi)} km/h : indépendante de la vitesse, elle ne correspond à aucun engrènement.`);
+        if (d.load === "charge") d.cause.push("Présente en traction/freinage, absente en érre.");
+        else if (d.load === "indep") d.cause.push("Présente aussi en érre : indépendante de la charge.");
+        else d.cause.push("Régimes insuffisamment renseignés : la dépendance à la charge n’est pas établie.");
+        { const m50 = f0 / 50; if (Math.round(m50) >= 1 && Math.abs(m50 - Math.round(m50)) * 50 <= 3) d.cause.push(`Multiple de 50 Hz (${Math.round(m50)} × 50 Hz).`); }
         if (f0 >= BAND[0] && f0 <= BAND[1]) d.cause.push("Elle se situe dans la bande gênante 1 500–1 700 Hz.");
       }
     }
-    if (d.load === "charge" && fam.type !== "fixe") d.cause.push("Liée à la charge : forte en traction/freinage, faible en érre (flanc de denture chargé).");
+    if (d.load === "charge" && fam.type !== "fixe") d.cause.push("Liée à la charge : forte en traction/freinage, faible en érre.");
     else if (d.load === "indep" && fam.type !== "fixe") d.cause.push("Présente aussi en érre : peu dépendante de la charge.");
     return d;
   }
@@ -238,7 +238,7 @@
     // deux fréquences du même organe avec des diamètres équivalents différents = deux essieux
     res.families.forEach((d, i) => res.families.slice(0, i).forEach((e) => {
       if (d.organs[0] && e.organs[0] && d.organs[0].label === e.organs[0].label && Math.abs(d.organs[0].dEq - e.organs[0].dEq) > 15)
-        d.cause.push(`Même organe que la fréquence n°${e.rank}, avec un diamètre équivalent différent (${fmt(d.organs[0].dEq)} contre ${fmt(e.organs[0].dEq)} mm) : cohérent avec les <b>deux essieux E1 / E2</b>.`);
+        d.cause.push(`Même organe que la fréquence n°${e.rank}, avec un diamètre équivalent différent (${fmt(d.organs[0].dEq)} contre ${fmt(e.organs[0].dEq)} mm) : correspond à deux essieux E1 / E2 de diamètres différents.`);
     }));
     return res;
   }
@@ -253,8 +253,8 @@
     const rows = res.families.map((d) => `<tr${d.rank === 1 ? ' class="dom-first"' : ""}><td>${d.rank === 1 ? "★ " : ""}${d.rank}</td><td>${freqTxt(d)}</td><td>${speedTxt(d)}</td><td>${regTxt(d.pct)}</td><td>${fmt(d.dbMed)} dB rel.</td><td>${d.cause.join("<br>")}</td></tr>`).join("");
     return `<style>.dom-table{border-collapse:collapse;width:100%;font-size:13px}.dom-table th,.dom-table td{border:1px solid #A0A0A0;padding:4px 6px;text-align:left;vertical-align:top}.dom-table th{background:#E1E1E1;color:#000}.dom-table tr.dom-first td{background:#F1E6F3;color:#000}</style>`
       + `<p class="small">${calcNote()}</p>`
-      + `<table class="dom-table"><tr><th>#</th><th>Fréquence</th><th>Vitesse</th><th>Présence par régime</th><th>Niveau</th><th>Cause possible</th></tr>${rows}</table>`
-      + `<p class="small"><i>${res.nRows} lignes exploitées. La ★ est la fréquence qui totalise le plus d’émergence. Niveaux relatifs non calibrés ; causes à confirmer par les contrôles de maintenance.</i></p>`;
+      + `<table class="dom-table"><tr><th>#</th><th>Fréquence</th><th>Vitesse</th><th>Présence par régime</th><th>Niveau</th><th>Correspondance</th></tr>${rows}</table>`
+      + `<p class="small"><i>${res.nRows} lignes exploitées. La ★ est la fréquence qui totalise le plus d’émergence. Niveaux relatifs non calibrés. Ces constats portent sur la fréquence mesurée ; ils n’établissent pas l’état d’un organe.</i></p>`;
   }
   function rowsForReport(res) {
     const strip = (s) => String(s).replace(/<br>/g, " ; ").replace(/<[^>]+>/g, "");
@@ -285,12 +285,12 @@
     const live = typeof acqRunning !== "undefined" && acqRunning;
     if (live) {
       last = null; lastKey = "";
-      if (el) el.innerHTML = "<h4>Fréquences dominantes : vitesse et cause possible</h4><p><i>Calculées à l’arrêt de l’acquisition, pour ne pas ralentir la mesure.</i></p>";
+      if (el) el.innerHTML = "<h4>Fréquences dominantes : vitesse et organe correspondant</h4><p><i>Calculées à l’arrêt de l’acquisition, pour ne pas ralentir la mesure.</i></p>";
       try { window.EnqueteTGV && window.EnqueteTGV.render(rows, document.getElementById("enquetePanel")); } catch (e) { /* ignore */ }
       return null;
     }
     if (!last || key !== lastKey) { last = analyse(rows); lastKey = key; }
-    if (el) el.innerHTML = "<h4>Fréquences dominantes : vitesse et cause possible</h4>" + html(last);
+    if (el) el.innerHTML = "<h4>Fréquences dominantes : vitesse et organe correspondant</h4>" + html(last);
     try { window.EnqueteTGV && window.EnqueteTGV.render(rows, document.getElementById("enquetePanel")); } catch (e) { console.warn("Enquête", e); }
     ensureDiameters();
     return last;

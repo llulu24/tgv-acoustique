@@ -396,9 +396,9 @@
     lines.push("Bandes latérales (−/+ par rapport au sifflement ; émergence au-dessus du plancher) : " + ord.sb.map((b) => `±${fmt(b.spacingHz, 1)} Hz (1/${b.teeth}) ${fmt(b.lowRel)} / ${fmt(b.highRel)} dB, émergence ${fmt(b.emergence)} dB`).join(" ; ") + ".");
     const top = sbs[0], second = sbs[1];
     if (top.emergence >= 10 && top.emergence - second.emergence >= 4) {
-      lines.push(`→ <b>Modulation dominante à ±${fmt(top.spacingHz, 1)} Hz : ${top.label}</b>. Pistes : faux-rond, excentricité, défaut localisé de denture, roulement de cet arbre.` + (Number.isFinite(top.h2Emergence) && top.h2Emergence >= 8 ? " Les mêmes bandes latérales existent autour de l’harmonique 2 : c’est bien une modulation de la fréquence, pas une fréquence d’un autre essieu." : ""));
+      lines.push(`→ <b>Modulation dominante à ±${fmt(top.spacingHz, 1)} Hz : ${top.label}</b>.` + (Number.isFinite(top.h2Emergence) && top.h2Emergence >= 8 ? " Les mêmes bandes latérales existent autour de l’harmonique 2 : c’est bien une modulation de la fréquence, pas une fréquence d’un autre essieu." : ""));
     } else if (top.emergence >= 10) lines.push("→ Plusieurs familles de bandes latérales d’émergence voisine : modulation non attribuable à un seul arbre.");
-    else lines.push("→ Pas de bande latérale marquée : sifflement d’engrènement peu modulé (excitation régulière, la gêne vient surtout du niveau et de la résonance).");
+    else lines.push("→ Pas de bande latérale marquée: sifflement d’engrènement peu modulé.");
     if (Number.isFinite(ord.h2Emergence)) lines.push(`Harmonique 2 (${fmt(2 * os.fMid)} Hz) : ${fmt(ord.h2Rel)} dB par rapport au sifflement, émergence ${fmt(ord.h2Emergence)} dB.`);
     if (ord.others.length) lines.push("Autres modulations symétriques non identifiées : " + ord.others.map((o) => `±${fmt(o.hz, 1)} Hz (${fmt(o.lowRel)} / ${fmt(o.highRel)} dB)`).join(" ; ") + ". Origine à rechercher (suspension, structure, autre arbre).");
 

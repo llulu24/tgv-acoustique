@@ -344,7 +344,7 @@
         const mean = pairs.reduce((s, p) => s + p.d, 0) / pairs.length, top = pairs.reduce((a, b) => (b.d > a.d ? b : a));
         out.diffSpeed = top.v;
         out.lines.push(`Bande ${BAND[0]}–${BAND[1]} Hz : traction <b>${mean >= 0 ? "+" : ""}${fmt(mean, 1)} dB</b> par rapport à l’erre/freinage à vitesse égale (${pairs.length} tranche(s) de 5 km/h ; écart maximal ${fmt(top.d, 1)} dB vers ${fmt(top.v)} km/h).` +
-          (mean >= 6 ? " → <b>Composante liée à la charge confirmée</b> (flanc traction de denture ou bruit électrique de traction)." : mean >= 3 ? " → Composante liée à la charge probable." : " → Pas de différence nette traction / erre dans cette bande."));
+          (mean >= 6 ? " → Composante liée à la charge (écart ≥ 6 dB)." : mean >= 3 ? " → Écart de 3 à 6 dB : dépendance à la charge limitée, non établie." : " → Pas de différence nette traction / erre dans cette bande."));
       } else out.lines.push("Traction et erre ne se recouvrent à aucune vitesse (±2,5 km/h) : passez en erre à la vitesse où le bruit est fort pour obtenir la comparaison.");
     }
 
@@ -375,8 +375,8 @@
             const dEq = best.ax.diameter * (best.s / prop);
             out.lines.push(`→ Correspond à l’<b>${best.ch.label.toLowerCase()}</b> (pente théorique ${fmt(best.s, 3)} Hz par km/h, écart ${best.err >= 0 ? "+" : ""}${fmt(best.err * 100, 1)} %). Diamètre de roue équivalent : <b>${fmt(dEq)} mm</b> (${best.ax.id} réglé à ${fmt(best.ax.diameter)} mm).` +
               (Math.abs(cands[0].err - cands[1].err) < 0.01 && cands[1].ch.key === best.ch.key ? " Attribution E1/E2 incertaine : écart entre essieux inférieur à la précision de la vitesse." : ""));
-          } else out.lines.push(`→ La pente ne correspond à aucun engrènement de la chaîne configurée (écart minimal ${fmt(best.err * 100, 1)} % avec ${best.ch.label.toLowerCase()} ${best.ax.id}). Vérifier les nombres de dents, une harmonique, ou une autre source tournante.`);
-        } else out.lines.push("→ Relation fréquence / vitesse peu nette (corrélation faible ou ordonnée à l’origine élevée) : plusieurs sources se succèdent probablement dans la zone. Lisez le diagramme de Campbell.");
+          } else out.lines.push(`→ La pente ne correspond à aucun engrènement de la chaîne configurée (écart minimal ${fmt(best.err * 100, 1)} % avec ${best.ch.label.toLowerCase()} ${best.ax.id}).`);
+        } else out.lines.push("→ Relation fréquence / vitesse peu nette (corrélation faible ou ordonnée à l’origine élevée) : la fréquence ne suit pas une seule pente dans la zone. Voir le diagramme de Campbell.");
       }
     } else out.lines.push(`Pic tonal ${SEARCH[0]}–${SEARCH[1]} Hz : moins de 10 points tonals (émergence ≥ 10 dB, vitesse ≥ 60 km/h) — pente non calculable.`);
 
@@ -390,7 +390,7 @@
         out.lines.push("Bandes latérales autour du pic (" + fmt(fpk) + " Hz), émergence au-dessus du plancher : " + res.map((b) => `±${fmt(fpk / b.teeth)} Hz (1/${b.teeth}) ${fmt(b.med, 1)} dB`).join(" ; ") + ".");
         const top = res[0], second = res[1];
         if (top.med >= 6 && (!second || top.med - second.med >= 3))
-          out.lines.push(`→ Modulation dominante à <b>±${fmt(fpk / top.teeth)} Hz</b>, soit la ${top.label} : piste <b>faux-rond, excentricité, défaut localisé de denture ou roulement de cet arbre</b>.`);
+          out.lines.push(`→ Modulation dominante à <b>±${fmt(fpk / top.teeth)} Hz</b>, soit la ${top.label}.`);
         else if (top.med >= 6) out.lines.push("→ Plusieurs familles de bandes latérales d’émergence voisine : modulation non attribuable à un seul arbre.");
         else out.lines.push("→ Pas de bande latérale marquée (< 6 dB) : sifflement d’engrènement peu modulé.");
       }
@@ -723,7 +723,7 @@
   function renderDiagnosis() {
     state.diag = diagnose();
     $id("campbellDiagnosis").innerHTML = "<ul>" + state.diag.lines.map((l) => `<li>${l}</li>`).join("") + "</ul>";
-    // v0.9.8 : fréquences dominantes, vitesse et cause possible
+    // v0.9.8 : fréquences dominantes, vitesse et organe correspondant
     try { window.DominanteTGV?.render(state.rows, $id("dominantePanel")); } catch (e) { console.warn("Fréquences dominantes", e); }
   }
   function renderAll(force = false) {

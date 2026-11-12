@@ -339,19 +339,19 @@
     }
     if (campDiag) s1.appendChild(note("<b>Diagnostic automatique :</b><br>" + esc(campDiag).replace(/\n+/g, "<br>")));
     const domRes = window.DominanteTGV?.last;
-    if (domRes?.families?.length) { s1.appendChild(note("<b>Fréquences dominantes : vitesse et cause possible</b>")); try { s1.appendChild(note(window.DominanteTGV.calcNote())); } catch (e) { /* note de diamètres facultative */ } s1.appendChild(table(["#", "Fréquence", "Vitesse", "Présence par régime", "Cause possible"], window.DominanteTGV.rowsForReport(domRes))); }
+    if (domRes?.families?.length) { s1.appendChild(note("<b>Fréquences dominantes : vitesse et organe correspondant</b>")); try { s1.appendChild(note(window.DominanteTGV.calcNote())); } catch (e) { /* note de diamètres facultative */ } s1.appendChild(table(["#", "Fréquence", "Vitesse", "Présence par régime", "Cause possible"], window.DominanteTGV.rowsForReport(domRes))); }
 
-    // v0.9.9 : enquête (verdict, suspects, carte de gêne, spectre traction − érre)
+    // v0.9.9 : analyse (constat, sources, carte de gêne, spectre traction − érre)
     try {
       const enq = window.EnqueteTGV?.reportParts?.();
       if (enq) {
         s1.appendChild(note("<b>Enquête : verdict</b><br>" + esc(enq.head) + "<br>" + enq.lines.map(esc).join("<br>")));
         if (enq.rel) {
-          s1.appendChild(note("<b>Fiabilité du verdict : confiance " + esc(enq.rel.level) + "</b><br>" + esc(enq.rel.desig)));
+          s1.appendChild(note("<b>Fiabilité de l’analyse : " + esc(enq.rel.level) + "</b><br>" + esc(enq.rel.desig)));
           s1.appendChild(table(["Critère", "Constat", "État"], enq.rel.crit));
           if (enq.rel.need.length) s1.appendChild(note("<b>Pour fiabiliser :</b><br>" + enq.rel.need.map(esc).join("<br>")));
         }
-        if (enq.suspects.length) s1.appendChild(table(["Piste", "Indice /100", "Preuves"], enq.suspects.map((r) => [r[0], String(r[1]), r[2]])));
+        if (enq.suspects.length) s1.appendChild(table(["Source", "Indice de concordance /100", "Éléments"], enq.suspects.map((r) => [r[0], String(r[1]), r[2]])));
         enq.imgs.forEach(([t, url]) => { s1.appendChild(note("<b>" + esc(t) + "</b>")); s1.appendChild(createReportImage(url, t)); });
       }
     } catch (e) { console.warn("Rapport enquête", e); }
